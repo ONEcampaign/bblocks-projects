@@ -1,0 +1,131 @@
+_min_copier_version: "9.0.0"
+_subdirectory: template
+
+# Metadata
+project_name:
+  type: str
+  help: What is your project name? (e.g., "My Awesome Project")
+
+project_slug:
+  type: str
+  help: Python-compatible project name (e.g., "my_awesome_project")
+  default: "{{ project_name|lower|replace(' ', '_')|replace('-', '_') }}"
+
+project_description:
+  type: str
+  help: Brief project description
+
+# Project type - drives structure
+project_type:
+  type: str
+  help: What type of project?
+  choices:
+    Package: package
+    Research/Analysis: research
+  default: package
+
+# Author info
+author_name:
+  type: str
+  help: Author name
+  default: ""
+
+author_email:
+  type: str
+  help: Author email
+  default: ""
+
+# Python version
+python_version:
+  type: str
+  help: Minimum Python version
+  default: "3.11"
+  choices:
+    - "3.11"
+    - "3.12"
+    - "3.13"
+
+# License
+license:
+  type: str
+  help: License
+  choices:
+    MIT: mit
+    Apache-2.0: apache
+    BSD-3-Clause: bsd3
+    None: none
+  default: mit
+
+# GitHub settings (for CI/CD)
+github_username:
+  type: str
+  help: GitHub username or organization
+  when: "{{ project_type == 'package' }}"
+
+# Post-generation messages
+_message_after_copy: |
+  🎉 Project "{{ project_name }}" created successfully!
+
+  Next steps:
+
+  1. Change directory to the project root:
+
+     $ cd {{ _copier_conf.dst_path }}
+
+  2. Review and edit README.md with project-specific information
+
+  {% if project_type == 'package' -%}
+  3. Run tests to verify everything works:
+
+     $ uv run pytest
+
+  4. Build your package:
+
+     $ uv build
+
+  5. When ready to publish:
+     - Set up PyPI trusted publishing: https://docs.pypi.org/trusted-publishers/
+     - Create a git tag: git tag v0.1.0
+     - Push the tag: git push origin v0.1.0
+  {%- else -%}
+  3. Check out the example analysis script:
+
+     $ uv run python scripts/example_analysis.py
+
+  4. Add your data files to raw_data/
+
+  5. Write your analysis scripts in scripts/
+
+  6. Run quality checks:
+
+     $ uv run ruff check .
+     $ uv run mypy scripts/
+  {%- endif %}
+
+_message_after_update: |
+  ✨ Project "{{ project_name }}" updated successfully!
+
+  The template has been updated. Please review the changes:
+
+  1. Check for conflicts in modified files
+  2. Review .copier-answers.yml for updated template settings
+  3. Run tests to ensure everything still works{% if project_type == 'package' %}: uv run pytest{% endif %}
+  4. Commit the changes when ready
+
+  To see what changed:
+     $ git diff
+
+  Need help resolving conflicts? Check the Copier docs:
+  https://copier.readthedocs.io/en/stable/updating/
+
+# Post-generation tasks
+_tasks:
+  - "git init"
+  - "uv venv"
+  - "uv sync"  # Creates/updates uv.lock for reproducible builds
+  - "git add ."  # Includes uv.lock for version control
+  - 'git commit -m "Initial commit from copier template"'
+  - command: "pre-commit install"
+    when: "{{ _copier_conf.os in ['linux', 'macos'] }}"
+  - command: "pre-commit install"
+    when: "{{ _copier_conf.os == 'windows' }}"

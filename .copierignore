@@ -1,0 +1,18 @@
+# Exclude template development files from generation
+*.pyc
+__pycache__/
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Exclude repo root files (these are for the template repo itself)
+LICENSE
+README.md
+.gitignore
+.gitattributes
+.copierignore
+docs/
+
+# But include template versions
+!template/**

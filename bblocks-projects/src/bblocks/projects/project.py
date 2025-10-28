@@ -1,7 +1,7 @@
 """Project analysis and detection utilities."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import toml
 from rich.console import Console
@@ -22,10 +22,10 @@ class Project:
         """
         self.path = path.resolve()
         self.pyproject_path = self.path / "pyproject.toml"
-        self._pyproject_data: dict | None = None
+        self._pyproject_data: dict[str, Any] | None = None
 
     @property
-    def pyproject_data(self) -> dict:
+    def pyproject_data(self) -> dict[str, Any]:
         """Load and cache pyproject.toml data."""
         if self._pyproject_data is None:
             if self.pyproject_path.exists():
@@ -76,7 +76,9 @@ class Project:
 
     def get_project_name(self) -> str | None:
         """Get project name from pyproject.toml."""
-        return self.pyproject_data.get("project", {}).get("name")
+        project_data = self.pyproject_data.get("project", {})
+        name = project_data.get("name") if isinstance(project_data, dict) else None
+        return name if isinstance(name, str) else None
 
     def has_dependency(self, name: str) -> bool:
         """Check if project has a dependency."""
@@ -111,7 +113,10 @@ class Project:
         errors = []
 
         if not self.has_pyproject():
-            errors.append("No pyproject.toml found. This doesn't appear to be a Python project.")
+            errors.append(
+                "No pyproject.toml found. This doesn't appear to be a "
+                "Python project."
+            )
 
         if not self.uses_uv():
             errors.append(

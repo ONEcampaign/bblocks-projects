@@ -1,6 +1,6 @@
 """Component installation logic."""
 
-from pathlib import Path
+from typing import Any
 
 import toml
 from rich.console import Console
@@ -15,8 +15,8 @@ console = Console()
 
 
 def merge_config_sections(
-    existing: dict, updates: dict, path: str = ""
-) -> dict:
+    existing: dict[str, Any], updates: dict[str, Any], path: str = ""
+) -> dict[str, Any]:
     """Recursively merge config updates into existing config.
 
     Args:
@@ -54,7 +54,7 @@ def merge_config_sections(
 
 
 def show_config_diff(
-    component_name: str, existing: dict, updates: dict
+    component_name: str, existing: dict[str, Any], updates: dict[str, Any]
 ) -> None:
     """Show what config changes will be made.
 
@@ -63,13 +63,21 @@ def show_config_diff(
         existing: Existing config
         updates: Proposed updates
     """
-    console.print(f"\n[bold cyan]{component_name}[/bold cyan] will add/modify these config sections:")
+    console.print(
+        f"\n[bold cyan]{component_name}[/bold cyan] will add/modify these "
+        "config sections:"
+    )
 
     for section, content in updates.items():
         if section in existing:
-            console.print(f"\n[yellow]Will merge into existing:[/yellow] [tool.{section}]")
+            console.print(
+                f"\n[yellow]Will merge into existing:[/yellow] "
+                f"[tool.{section}]"
+            )
         else:
-            console.print(f"\n[green]Will add new section:[/green] [tool.{section}]")
+            console.print(
+                f"\n[green]Will add new section:[/green] [tool.{section}]"
+            )
 
         # Show the content
         toml_str = toml.dumps({section: content})
@@ -111,7 +119,8 @@ def install_component(
             console.print(f"  • {conflict}")
 
         if interactive:
-            if not Confirm.ask("\nContinue anyway? (will merge configs, skip existing files)"):
+            prompt = "\nContinue anyway? (will merge configs, skip existing files)"
+            if not Confirm.ask(prompt):
                 console.print("[yellow]Installation cancelled[/yellow]")
                 return False
         else:
@@ -121,7 +130,8 @@ def install_component(
     # Show what will be changed
     config_updates = component.get_config_updates(project)
     if config_updates:
-        show_config_diff(component.name, project.pyproject_data.get("tool", {}), config_updates)
+        existing_tool = project.pyproject_data.get("tool", {})
+        show_config_diff(component.name, existing_tool, config_updates)
 
         if interactive:
             if not Confirm.ask("\nApply these config changes?"):
@@ -134,7 +144,10 @@ def install_component(
         dest_path = project.path / file_spec.destination
 
         if dest_path.exists() and not force:
-            console.print(f"[yellow]Skipping existing file:[/yellow] {file_spec.destination}")
+            console.print(
+                f"[yellow]Skipping existing file:[/yellow] "
+                f"{file_spec.destination}"
+            )
             continue
 
         if file_spec.create_dirs:
@@ -193,7 +206,10 @@ def install_component(
             if Confirm.ask("\nAdd these dependencies now?"):
                 _add_dependencies(project, dev_deps, dev=True)
             else:
-                console.print("[yellow]Skipped dependency installation. Add manually with:[/yellow]")
+                console.print(
+                    "[yellow]Skipped dependency installation. "
+                    "Add manually with:[/yellow]"
+                )
                 console.print(f"  uv add --dev {' '.join(dev_deps)}")
 
     # Show post-install steps
@@ -219,11 +235,13 @@ def _add_dependencies(
     """
     import subprocess
 
-    flag = "--dev" if dev else ""
     for dep in dependencies:
         # Check if already present
         dep_name = dep.split(">=")[0].split("==")[0]
-        has_it = project.has_dev_dependency(dep_name) if dev else project.has_dependency(dep_name)
+        if dev:
+            has_it = project.has_dev_dependency(dep_name)
+        else:
+            has_it = project.has_dependency(dep_name)
 
         if has_it:
             continue

@@ -300,7 +300,7 @@ def add(
     console.print(f"  Path: {project.path}")
     console.print(f"  Name: {project.get_project_name() or 'Unknown'}")
     console.print(f"  Type: {project.detect_type()}")
-    console.print(f"  Uses uv: Yes")
+    console.print("  Uses uv: Yes")
 
     # Install each component
     success_count = 0
@@ -326,11 +326,16 @@ def add(
             ):
                 success_count += 1
         except Exception as e:
-            console.print(f"\n[bold red]Error installing {component_name}:[/bold red] {e}")
+            console.print(
+                f"\n[bold red]Error installing {component_name}:[/bold red] {e}"
+            )
             continue
 
     # Summary
-    console.print(f"\n[bold]Summary:[/bold] Installed {success_count}/{len(components)} components")
+    console.print(
+        f"\n[bold]Summary:[/bold] Installed {success_count}/{len(components)} "
+        "components"
+    )
 
 
 @app.callback()

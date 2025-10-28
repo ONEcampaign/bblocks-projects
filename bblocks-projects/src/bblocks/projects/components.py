@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 
@@ -40,7 +40,7 @@ class Component(ABC):
         """
 
     @abstractmethod
-    def get_config_updates(self, project: Project) -> dict:
+    def get_config_updates(self, project: Project) -> dict[str, Any]:
         """Get pyproject.toml configuration updates.
 
         Args:
@@ -156,7 +156,7 @@ class PreCommitComponent(Component):
             )
         ]
 
-    def get_config_updates(self, project: Project) -> dict:
+    def get_config_updates(self, project: Project) -> dict[str, Any]:
         """No pyproject.toml updates needed."""
         return {}
 
@@ -190,7 +190,7 @@ class RuffComponent(Component):
         """No files to install (config in pyproject.toml)."""
         return []
 
-    def get_config_updates(self, project: Project) -> dict:
+    def get_config_updates(self, project: Project) -> dict[str, Any]:
         """Get ruff configuration."""
         python_version = project.pyproject_data.get("project", {}).get(
             "requires-python", ">=3.11"
@@ -301,7 +301,7 @@ jobs:
             )
         ]
 
-    def get_config_updates(self, project: Project) -> dict:
+    def get_config_updates(self, project: Project) -> dict[str, Any]:
         """No pyproject.toml updates needed."""
         return {}
 
@@ -342,7 +342,7 @@ class PytestComponent(Component):
         """No files (config in pyproject.toml)."""
         return []
 
-    def get_config_updates(self, project: Project) -> dict:
+    def get_config_updates(self, project: Project) -> dict[str, Any]:
         """Get pytest and coverage configuration."""
         project_name = project.get_project_name() or "project"
         package_name = project_name.replace("-", "_")
@@ -351,7 +351,10 @@ class PytestComponent(Component):
             "tool.pytest.ini_options": {
                 "testpaths": ["tests"],
                 "python_files": ["test_*.py"],
-                "addopts": f"-v --cov=src/{package_name} --cov-report=term --cov-report=xml",
+                "addopts": (
+                    f"-v --cov=src/{package_name} --cov-report=term "
+                    "--cov-report=xml"
+                ),
             },
             "tool.coverage.run": {
                 "source": ["src"],
@@ -451,7 +454,7 @@ jobs:
             )
         ]
 
-    def get_config_updates(self, project: Project) -> dict:
+    def get_config_updates(self, project: Project) -> dict[str, Any]:
         """Check if build-system is configured."""
         if not project.has_config_section("build-system"):
             return {
@@ -472,13 +475,12 @@ jobs:
 
     def get_post_install_steps(self, project: Project) -> list[str]:
         """Return publishing setup steps."""
-        project_name = project.get_project_name() or "your-project"
         return [
-            f"Register project on PyPI: https://pypi.org/manage/projects/",
+            "Register project on PyPI: https://pypi.org/manage/projects/",
             "Set up PyPI trusted publishing in project settings",
-            f"Add GitHub as trusted publisher: ONEcampaign/<your-repo>",
+            "Add GitHub as trusted publisher: ONEcampaign/<your-repo>",
             "Specify workflow: release.yml",
-            f"Create a tag to publish: git tag v0.1.0 && git push origin v0.1.0",
+            "Create a tag to publish: git tag v0.1.0 && git push origin v0.1.0",
         ]
 
 

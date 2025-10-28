@@ -39,6 +39,7 @@ dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
     "mypy>=1.11.0",
+    "types-toml>=0.10.8.20240310",
 ]
 
 [build-system]
@@ -69,3 +70,5 @@ strict = true
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+namespace_packages = true
+explicit_package_bases = true

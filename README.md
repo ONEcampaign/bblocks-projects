@@ -9,16 +9,37 @@ Modern Python project templates using Copier, with uv for dependency management.
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: Using bblocks-projects (Recommended)
 
+The easiest way to use these templates:
+
+```bash
+# Create a new project (no installation required)
+uvx bblocks-projects my-new-project
+
+# Or install persistently
+uv tool install bblocks-projects
+bblocks-projects my-new-project
+
+# Add components to existing projects
+bblocks-projects add pre-commit ruff ci
+```
+
+**New!** You can now add individual template components (pre-commit hooks, CI workflows, ruff config, etc.) to your existing projects without full template adoption.
+
+See [bblocks-projects](bblocks-projects/) for full documentation.
+
+### Option 2: Using Copier Directly
+
+If you prefer to use Copier directly:
+
+**Prerequisites:**
 - Python 3.11+
 - [copier](https://copier.readthedocs.io/) installed: `uv tool install copier`
 - [uv](https://docs.astral.sh/uv/) installed
 
-### Generate a New Project
-
 ```bash
-copier copy gh:{{ github_username if github_username else 'yourusername' }}/repo-templates my-new-project
+copier copy gh:ONEcampaign/repo-templates my-new-project
 cd my-new-project
 ```
 
@@ -28,25 +49,25 @@ Copier will ask questions to customize your project.
 
 ### All Projects
 
-- ✅ uv for fast dependency management
-- ✅ Ruff for linting and formatting (comprehensive rules, Google docstrings)
-- ✅ mypy for type checking (strict mode)
-- ✅ pre-commit hooks configured
-- ✅ GitHub Actions CI
+-  uv for fast dependency management
+-  Ruff for linting and formatting (comprehensive rules, Google docstrings)
+-  mypy for type checking (strict mode)
+-  pre-commit hooks configured
+-  GitHub Actions CI
 
 ### Python Packages
 
-- ✅ src-layout structure
-- ✅ pytest with coverage
-- ✅ PyPI publishing workflow with trusted publishing
-- ✅ Type hint support (py.typed)
+-  src-layout structure
+-  pytest with coverage
+-  PyPI publishing workflow with trusted publishing
+-  Type hint support (py.typed)
 
 ### Research Projects
 
-- ✅ Organized scripts/ structure
-- ✅ Paths class for consistent directory references
-- ✅ Configured logger for analysis scripts
-- ✅ Separate raw_data/ and output/ directories
+-  Organized scripts/ structure
+-  Paths class for consistent directory references
+-  Configured logger for analysis scripts
+-  Separate raw_data/ and output/ directories
 
 ## Post-Generation
 
@@ -59,7 +80,7 @@ After generating a project:
 
 ## Documentation
 
-📚 **Comprehensive guides for all use cases:**
+ **Comprehensive guides for all use cases:**
 
 - **[Getting Started](docs/usage/getting-started.md)** - Create a new project from scratch
 - **[Updating Projects](docs/usage/updating.md)** - Keep your project in sync with template updates
@@ -68,20 +89,29 @@ After generating a project:
 
 ### Quick Reference
 
-**Create new project:**
+**Using bblocks-projects (recommended):**
 ```bash
-copier copy gh:ONEcampaign/repo-templates my-new-project
+# Create new project
+uvx bblocks-projects my-new-project
+
+# Update existing project
+cd my-project
+bblocks-projects update
+
+# Add components to existing project
+bblocks-projects add pre-commit ruff ci
 ```
 
-**Update existing project:**
+**Using Copier directly:**
 ```bash
+# Create new project
+copier copy gh:ONEcampaign/repo-templates my-new-project
+
+# Update existing project
 cd your-project
 copier update
-```
 
-**Adopt in existing project (cherry-pick approach):**
-```bash
-# Generate template elsewhere, then copy what you need
+# Adopt in existing project (cherry-pick approach)
 copier copy gh:ONEcampaign/repo-templates /tmp/template-ref
 cp /tmp/template-ref/.github/workflows/* .github/workflows/
 ```

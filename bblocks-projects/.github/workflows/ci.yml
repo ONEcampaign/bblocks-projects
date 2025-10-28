@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bblocks-projects/**'
+  pull_request:
+    paths:
+      - 'bblocks-projects/**'
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11', '3.12', '3.13']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          cd bblocks-projects
+          uv sync --all-extras --dev
+
+      - name: Run tests
+        run: |
+          cd bblocks-projects
+          uv run pytest tests/ -v
+
+      - name: Run linting
+        run: |
+          cd bblocks-projects
+          uv run ruff check .
+
+      - name: Run type checking
+        run: |
+          cd bblocks-projects
+          uv run mypy src/

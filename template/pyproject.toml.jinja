@@ -51,15 +51,58 @@ dev = [
 line-length = 88
 target-version = "py{{ python_version|replace('.', '') }}"
 
-[tool.ruff.lint]
-select = ["ALL"]
-ignore = [
-    "COM812",  # conflicts with formatter
-    "ISC001",  # conflicts with formatter
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    ".pytest_cache",
+    "htmlcov",
 ]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F",      # pycodestyle, pyflakes
+    "I",                 # isort
+    "N",                 # pep8-naming
+    "UP",                # pyupgrade
+    "B",                 # bugbear
+    "C4",                # comprehensions
+    "SIM",               # simplify
+    "PL",                # pylint
+    "RUF",               # ruff-specific
+    "ERA",               # commented code
+    "PERF",              # performance
+]
+
+ignore = [
+    "E501",    # Line length (formatter handles)
+    "PLR0913", # Too many arguments
+    "PLR2004", # Magic values
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Use spaces for indentation
+indent-style = "space"
+
+# Like Black, respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect line endings
+line-ending = "auto"
 
 [tool.mypy]
 python_version = "{{ python_version }}"

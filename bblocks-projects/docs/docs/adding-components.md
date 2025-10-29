@@ -1,6 +1,6 @@
 # Adding Components
 
-Add ONE Campaign template features to any Python project—even if it wasn't created with bblocks-projects. This lets you adopt best practices incrementally without restructuring your entire project.
+Add ONE Data template features to any Python project—even if it wasn't created with bblocks-projects. This lets you adopt best practices incrementally without restructuring your entire project.
 
 ## Available Components
 
@@ -26,7 +26,7 @@ Available components:
 
 When you add a component, bblocks-projects:
 
-1. **Analyzes your project** - Detects project type and structure
+1. **Analyses your project** - Detects project type and structure
 2. **Shows what will change** - Displays files to create and configs to update
 3. **Asks for confirmation** - You review before anything happens
 4. **Installs the component** - Copies files and merges configurations
@@ -137,7 +137,6 @@ git commit -m "Add feature"
 ruff...............................................Passed
 ruff-format........................................Passed
 mypy...............................................Passed
-[main abc123] Add feature
 ```
 
 **When to use:**

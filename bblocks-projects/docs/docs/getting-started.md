@@ -11,7 +11,7 @@ You have three options for using bblocks-projects:
 No installation required. Run directly with uvx:
 
 ```bash
-uvx bblocks-projects create my-first-project
+uvx bblocks-projects create my-research-project
 ```
 
 This downloads and runs bblocks-projects automatically. Perfect for trying it out or occasional use.
@@ -87,7 +87,7 @@ You'll see a series of questions to customize your project:
 After you answer the questions, bblocks-projects automatically:
 
 1. Generates all project files
-2. Initializes a git repository
+2. Initialises a git repository
 3. Creates a virtual environment
 4. Installs dependencies
 5. Sets up pre-commit hooks

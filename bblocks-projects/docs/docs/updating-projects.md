@@ -231,13 +231,6 @@ git checkout -b feature/new-thing
 
 This avoids merge conflicts later.
 
-### Update on Template Announcements
-
-When template releases announce:
-- Security fixes
-- Breaking changes
-- New features you want
-
 ## Verify After Updating
 
 Always test after updating:
@@ -262,42 +255,6 @@ If everything passes:
 ```bash
 git commit -m "Update from template v1.2.0"
 git push
-```
-
-## Update Multiple Projects
-
-Update all your projects systematically:
-
-```bash
-# Create a script
-cat > update_all_projects.sh << 'EOF'
-#!/bin/bash
-for dir in ~/projects/*/; do
-    echo "Updating $dir..."
-    cd "$dir"
-    if [ -f .copier-answers.yml ]; then
-        bblocks-projects update
-        git diff --stat
-        echo "---"
-    fi
-done
-EOF
-
-chmod +x update_all_projects.sh
-./update_all_projects.sh
-```
-
-Review each project's changes and commit:
-
-```bash
-cd ~/projects/project1
-git diff  # Review
-git commit -m "Update from template"
-
-cd ~/projects/project2
-git diff
-git commit -m "Update from template"
-# etc.
 ```
 
 ## Re-answer Questions
@@ -350,7 +307,7 @@ The version you specified doesn't exist:
 
 ```bash
 # Check available versions
-git ls-remote --tags https://github.com/ONEcampaign/repo-templates.git
+git ls-remote --tags https://github.com/ONEcampaign/bblocks-projects.git
 
 # Use a valid version
 bblocks-projects update --ref v1.0.0
@@ -446,10 +403,10 @@ Compare with latest:
 ```bash
 # See template repository
 cat .copier-answers.yml | grep _src_path
-# _src_path: gh:ONEcampaign/repo-templates
+# _src_path: gh:ONEcampaign/bblocks-projects
 
 # Check latest on GitHub
-# https://github.com/ONEcampaign/repo-templates/commits/main
+# https://github.com/ONEcampaign/bblocks-projects/commits/main
 ```
 
 ## Automate Update Checks
@@ -505,7 +462,7 @@ uv run mypy src/
 
 ### 3. Update Regularly
 
-Don't let projects drift too far from template. Update monthly or quarterly.
+Don't let projects drift too far from template. 
 
 ### 4. Read Template Changelogs
 

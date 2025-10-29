@@ -40,9 +40,9 @@ bblocks-projects create my-awesome-package --type package
 **Example structure:**
 
 ```
-my-awesome-package/
+my-tool-package/
 ├── src/
-│   └── my_awesome_package/
+│   └── my_tool_package/
 │       ├── __init__.py
 │       ├── core.py
 │       └── py.typed
@@ -133,21 +133,7 @@ cd climate-analysis
 cp ~/Downloads/climate_data.csv raw_data/
 
 # Write analysis script
-cat > scripts/analyze_climate.py << 'EOF'
-import pandas as pd
-from scripts.config import Paths
-from scripts.logger import logger
-
-logger.info("Loading data...")
-df = pd.read_csv(Paths.raw_data / "climate_data.csv")
-logger.info(f"Loaded {len(df)} rows")
-
-# Your analysis
-summary = df.groupby("year").mean()
-summary.to_csv(Paths.output / "yearly_summary.csv")
-
-logger.info("Analysis complete!")
-EOF
+scripts/analyze_climate.py 
 
 # Add pandas
 uv add pandas
@@ -224,7 +210,7 @@ Every project includes these tools, pre-configured:
 
 ### uv - Dependency Management
 
-Fast Python package manager:
+Python package/dependency manager:
 
 ```bash
 # Add dependencies
@@ -240,7 +226,7 @@ uv run pytest
 
 ### Ruff - Linting and Formatting
 
-Lightning-fast code quality:
+Code quality:
 
 ```bash
 # Check code
@@ -395,7 +381,7 @@ Add your code and commit:
 
 ```bash
 # Add code
-vim src/my_project/core.py  # or scripts/analysis.py
+src/my_project/core.py  # or scripts/analysis.py
 
 # Quality checks run automatically
 git add .
@@ -436,7 +422,7 @@ Check your template reference:
 
 ```bash
 # Make sure the ref exists
-bblocks-projects create my-project --ref main  # Use main, not master
+bblocks-projects create my-project --ref main  
 ```
 
 ### Git initialization fails

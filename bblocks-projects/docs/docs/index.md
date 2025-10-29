@@ -1,14 +1,14 @@
 # bblocks-projects
 
-**ONE Campaign Python project utilities** - Create, update, and enhance Python projects with standardized templates and tools.
+**ONE Campaign Python project utilities** - Create, update, and enhance Python projects with standardised templates and tools.
 
 ## The Problem
 
-Setting up a new Python project means answering the same questions every time: Which linter? How to configure CI/CD? Where do tests go? What about type checking? You spend hours cobbling together configs from different projects, copying GitHub workflows, and tweaking pyproject.toml files.
+Setting up a new Python can involve many decisions: Which linter? How to configure CI/CD? Where do tests go? What about type checking? Which GitHub actions? How about code formatting?
 
-Worse, keeping multiple projects consistent is nearly impossible. When you improve the CI workflow in one project, you manually copy it to others. When Ruff releases a new version with better rules, you update each project individually. Your projects drift apart, each with slightly different configurations.
+We also need to have a standardised approach to how projects are structured, the tools that we use, etc. Without the right tooling, keeping multiple projects consistent is nearly impossible. When we improve the CI workflow in one project, we manually copy it to others. When Ruff releases a new version with better rules, we update each project individually. Our projects drift apart, each with slightly different configurations.
 
-And if you didn't start with a template? Adopting best practices means rewriting configs and restructuring directories. Most teams give up and live with inconsistency.
+And if we didn't start with a template? Adopting best practices means rewriting configs and restructuring directories. It's tempting to give up and live with inconsistency.
 
 ## The Solution
 
@@ -16,7 +16,7 @@ bblocks-projects gives you three simple commands to create, update, and enhance 
 
 ```bash
 # Create a new project with everything configured
-uvx bblocks-projects my-awesome-project
+uvx bblocks-projects my-research-project
 
 # Update an existing project to the latest template
 bblocks-projects update
@@ -40,8 +40,8 @@ uvx bblocks-projects my-data-analysis
 You get a complete project structure with uv, Ruff, mypy, pre-commit hooks, and GitHub Actions CI/CD - all configured and ready to use.
 
 Choose between:
-- **Package projects** - For libraries you'll publish to PyPI
-- **Research projects** - For data analysis and scientific computing
+- **Package projects** - For packages you'll publish to PyPI
+- **Research projects** - For research and data analysis projects
 
 ### Keep Projects Current
 
@@ -56,7 +56,7 @@ Get new features, updated dependencies, and improved configurations automaticall
 
 ### Enhance Existing Projects
 
-Add ONE Campaign standards to any Python project without full adoption:
+Add ONE Data standards to any Python project without full adoption:
 
 ```bash
 # Add pre-commit hooks
@@ -67,6 +67,7 @@ bblocks-projects add ruff ci pytest
 ```
 
 Available components:
+
 - **pre-commit** - Pre-commit hooks with Ruff and mypy
 - **ruff** - Linter and formatter with comprehensive rules
 - **ci** - GitHub Actions CI workflow
@@ -79,19 +80,21 @@ Each component integrates intelligently with your existing configuration.
 
 Every project includes:
 
-- **[uv](https://docs.astral.sh/uv/)** - Fast dependency management (10-100x faster than pip)
+- **[uv](https://docs.astral.sh/uv/)** - Fast dependency management 
 - **[Ruff](https://docs.astral.sh/ruff/)** - Lightning-fast linting and formatting
 - **[mypy](https://mypy.readthedocs.io/)** - Static type checking
 - **[pre-commit](https://pre-commit.com/)** - Automatic quality checks before commits
 - **[GitHub Actions](https://github.com/features/actions)** - CI/CD pipelines
 
 **For packages:**
+
 - src-layout structure
 - pytest with coverage
 - PyPI publishing with trusted publishing
 - Type hint support (py.typed)
 
 **For research projects:**
+
 - Organized scripts/ structure
 - Paths class for consistent directory references
 - Configured logger
@@ -131,4 +134,4 @@ pip install bblocks-projects
 
 - [Report Issues](https://github.com/ONEcampaign/bblocks-projects/issues)
 - [View Source](https://github.com/ONEcampaign/bblocks-projects)
-- [Template Repository](https://github.com/ONEcampaign/repo-templates)
+- [Template Repository](https://github.com/ONEcampaign/bblocks-projects)

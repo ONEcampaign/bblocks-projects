@@ -44,6 +44,12 @@ htmlcov/
 .dmypy.json
 dmypy.json
 
+# Ruff
+.ruff_cache/
+
+# Documentation
+docs/site/
+
 # uv
 .uv/
 uv.lock

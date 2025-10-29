@@ -1,130 +1,177 @@
 # Python Project Templates
 
-Modern Python project templates using Copier, with uv for dependency management.
+This repository contains:
 
-## Available Templates
+1. **bblocks-projects** - A CLI tool for creating, updating, and enhancing Python projects
+2. **template/** - Copier templates for Python packages and research projects
 
-- **Python Package**: Full package with tests, CI/CD, and PyPI publishing
-- **Research/Analysis**: Script-based analysis repos with organized structure
+## Repository Structure
 
-## Quick Start
+```
+repo-templates/
+├── bblocks-projects/       # CLI tool (installable via pip/uv)
+│   ├── src/                # Source code
+│   ├── docs/               # User documentation (MkDocs)
+│   └── pyproject.toml      # Package configuration
+│
+├── template/               # Copier template files
+│   ├── copier.yml          # Template questions and configuration
+│   ├── {% if ... %}/       # Conditional directories for project types
+│   └── [template files]    # Files copied to generated projects
+│
+└── README.md               # This file
+```
 
-### Option 1: Using bblocks-projects (Recommended)
+## bblocks-projects CLI Tool
 
-The easiest way to use these templates:
+A command-line tool that makes it easy to work with these templates.
 
+**Features:**
+- Create new Python projects (packages or research)
+- Update existing projects when templates improve
+- Add individual components (pre-commit, ruff, CI, etc.) to any project
+
+**Installation:**
 ```bash
-# Create a new project (no installation required)
-uvx bblocks-projects my-new-project
+# Use without installing
+uvx bblocks-projects create my-project
 
 # Or install persistently
 uv tool install bblocks-projects
-bblocks-projects my-new-project
-
-# Add components to existing projects
-bblocks-projects add pre-commit ruff ci
 ```
 
-**New!** You can now add individual template components (pre-commit hooks, CI workflows, ruff config, etc.) to your existing projects without full template adoption.
+**Documentation:**
 
-See [bblocks-projects](bblocks-projects/) for full documentation.
+Full documentation is available at [bblocks-projects/docs/](bblocks-projects/docs/):
 
-### Option 2: Using Copier Directly
+- [Getting Started](bblocks-projects/docs/docs/getting-started.md) - Installation and first project
+- [Creating Projects](bblocks-projects/docs/docs/creating-projects.md) - Package vs research projects
+- [Updating Projects](bblocks-projects/docs/docs/updating-projects.md) - Keeping projects in sync
+- [Adding Components](bblocks-projects/docs/docs/adding-components.md) - Enhance existing projects
 
-If you prefer to use Copier directly:
 
-**Prerequisites:**
-- Python 3.11+
-- [copier](https://copier.readthedocs.io/) installed: `uv tool install copier`
-- [uv](https://docs.astral.sh/uv/) installed
+## Template Directory
 
-```bash
-copier copy gh:ONEcampaign/repo-templates my-new-project
-cd my-new-project
+The `template/` directory contains [Copier](https://copier.readthedocs.io/) template files that define what gets generated when you create a new project.
+
+### How It Works
+
+Copier is a library for rendering project templates. When you run `bblocks-projects create` or `copier copy`, it:
+
+1. Reads `template/copier.yml` for configuration and questions
+2. Asks you questions (project name, type, Python version, etc.)
+3. Renders template files with your answers using Jinja2
+4. Copies the rendered files to your new project directory
+
+### Template Types
+
+The template supports two project types:
+
+**Python Package** - For libraries to publish on PyPI:
+- src-layout structure
+- pytest with coverage
+- PyPI publishing workflow
+- Type hint support
+
+**Research/Analysis** - For data analysis projects:
+- Organized scripts/ directory
+- Paths configuration
+- Logger setup
+- raw_data/ and output/ directories
+
+### Template Features
+
+All projects include:
+- **uv** for fast dependency management
+- **Ruff** for linting and formatting
+- **mypy** for type checking
+- **pre-commit** hooks
+- **GitHub Actions** CI/CD workflows
+
+### Conditional Content
+
+The template uses Jinja2 conditionals to include different files based on project type:
+
+```
+template/
+├── {% if project_type == 'package' %}src{% endif %}/
+│   └── [package files]
+├── {% if project_type == 'research' %}scripts{% endif %}/
+│   └── [analysis files]
+└── pyproject.toml.jinja  # Different configs per type
 ```
 
-Copier will ask questions to customize your project.
+See the [Copier documentation](https://copier.readthedocs.io/) for more on template syntax.
 
-## What You Get
+## Quick Start
 
-### All Projects
-
--  uv for fast dependency management
--  Ruff for linting and formatting (comprehensive rules, Google docstrings)
--  mypy for type checking (strict mode)
--  pre-commit hooks configured
--  GitHub Actions CI
-
-### Python Packages
-
--  src-layout structure
--  pytest with coverage
--  PyPI publishing workflow with trusted publishing
--  Type hint support (py.typed)
-
-### Research Projects
-
--  Organized scripts/ structure
--  Paths class for consistent directory references
--  Configured logger for analysis scripts
--  Separate raw_data/ and output/ directories
-
-## Post-Generation
-
-After generating a project:
-
-1. Review and update the generated README.md
-2. For packages: Set up PyPI trusted publishing (see docs/pypi-setup.md)
-3. Pre-commit hooks are installed automatically
-4. Start coding!
-
-## Documentation
-
- **Comprehensive guides for all use cases:**
-
-- **[Getting Started](docs/usage/getting-started.md)** - Create a new project from scratch
-- **[Updating Projects](docs/usage/updating.md)** - Keep your project in sync with template updates
-- **[Adopting in Existing Projects](docs/usage/adopting-existing.md)** - Use the template with existing code
-- **[Understanding .copier-answers.yml](docs/understanding-copier-answers.md)** - Why this file is critical and must be committed
-
-### Quick Reference
-
-**Using bblocks-projects (recommended):**
+**Create a new project:**
 ```bash
-# Create new project
-uvx bblocks-projects my-new-project
+uvx bblocks-projects create my-project
+```
+
+**Update an existing project:**
+```bash
+cd my-project
+uvx bblocks-projects update
+```
+
+**Add features to existing projects:**
+```bash
+cd existing-project
+uvx bblocks-projects add ruff ci pre-commit
+```
+
+## Using Copier Directly
+
+If you prefer to use Copier without the bblocks-projects CLI:
+
+```bash
+# Install Copier
+uv tool install copier
+
+# Create project from this template
+copier copy gh:ONEcampaign/repo-templates my-project
 
 # Update existing project
 cd my-project
-bblocks-projects update
-
-# Add components to existing project
-bblocks-projects add pre-commit ruff ci
-```
-
-**Using Copier directly:**
-```bash
-# Create new project
-copier copy gh:ONEcampaign/repo-templates my-new-project
-
-# Update existing project
-cd your-project
 copier update
-
-# Adopt in existing project (cherry-pick approach)
-copier copy gh:ONEcampaign/repo-templates /tmp/template-ref
-cp /tmp/template-ref/.github/workflows/* .github/workflows/
 ```
 
-## Extending
+The bblocks-projects CLI is a wrapper around Copier with a nicer interface and additional features like component installation.
 
-See [docs/adding-project-types.md](docs/adding-project-types.md) for how to add new project types to this template.
+## Development
+
+### Working on bblocks-projects
+
+```bash
+cd bblocks-projects
+uv sync
+uv run pytest
+uv run ruff check .
+```
+
+### Modifying the Template
+
+1. Edit files in `template/`
+2. Test by creating a project:
+   ```bash
+   copier copy . /tmp/test-project
+   ```
+3. Verify the generated project works
+
+### Template Testing Best Practices
+
+- Test both package and research project types
+- Verify generated projects pass their CI checks
+- Check that `uv sync` and `uv run pytest` work in generated packages
+- Ensure `.copier-answers.yml` is created (needed for updates)
 
 ## Requirements
 
-- Copier 9.0+
 - Python 3.11+
-- uv
+- [uv](https://docs.astral.sh/uv/)
+- [Copier](https://copier.readthedocs.io/) 9.0+ (if using directly)
 
 ## License
 

@@ -433,7 +433,7 @@ jobs:
           grep _commit .copier-answers.yml
           echo ""
           echo "Check for updates at:"
-          echo "https://github.com/ONEcampaign/repo-templates/commits/main"
+          echo "https://github.com/ONEcampaign/bblocks-projects/commits/main"
 ```
 
 This creates a monthly reminder to check for template updates.

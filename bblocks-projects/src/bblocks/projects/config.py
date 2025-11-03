@@ -1,7 +1,7 @@
 """Configuration constants for bblocks-projects."""
 
 # Template repository URL
-TEMPLATE_URL = "gh:ONEcampaign/repo-templates"
+TEMPLATE_URL = "gh:ONEcampaign/bblocks-projects"
 
 # Default template reference (branch/tag)
 DEFAULT_REF = "main"

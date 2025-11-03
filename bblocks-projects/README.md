@@ -238,12 +238,12 @@ For detailed documentation about the templates and best practices:
 
 - [Getting Started Guide](../docs/usage/getting-started.md)
 - [Updating Projects](../docs/usage/updating.md)
-- [Template Repository](https://github.com/ONEcampaign/repo-templates)
+- [Template Repository](https://github.com/ONEcampaign/bblocks-projects)
 
 ## Support
 
-- [Report Issues](https://github.com/ONEcampaign/repo-templates/issues)
-- [Discussions](https://github.com/ONEcampaign/repo-templates/discussions)
+- [Report Issues](https://github.com/ONEcampaign/bblocks-projects/issues)
+- [Discussions](https://github.com/ONEcampaign/bblocks-projects/discussions)
 
 ## License
 

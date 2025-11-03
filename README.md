@@ -8,7 +8,7 @@ This repository contains:
 ## Repository Structure
 
 ```
-repo-templates/
+bblocks-projects/
 ├── bblocks-projects/       # CLI tool (installable via pip/uv)
 │   ├── src/                # Source code
 │   ├── docs/               # User documentation (MkDocs)
@@ -131,7 +131,7 @@ If you prefer to use Copier without the bblocks-projects CLI:
 uv tool install copier
 
 # Create project from this template
-copier copy gh:ONEcampaign/repo-templates my-project
+copier copy gh:ONEcampaign/bblocks-projects my-project
 
 # Update existing project
 cd my-project

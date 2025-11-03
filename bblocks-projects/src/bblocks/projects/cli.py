@@ -172,7 +172,7 @@ def update(
         )
         console.print(
             "\nIf this is an existing project, see the adoption guide:\n"
-            "https://github.com/ONEcampaign/repo-templates/blob/main/docs/usage/adopting-existing.md"
+            "https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/usage/adopting-existing.md"
         )
         raise typer.Exit(code=1)
 

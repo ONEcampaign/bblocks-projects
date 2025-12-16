@@ -33,27 +33,45 @@ pip install bblocks-projects
 
 **Interactive (recommended):**
 ```bash
-bblocks-projects my-project
+bblocks-projects create
 ```
 
-The tool will ask you questions to customize your project:
+Running without arguments prompts you to choose where to create the project:
+- Current directory (if you've already created and `cd`'d into a folder)
+- New subdirectory (specify the name)
+
+The tool will then ask questions to customize your project:
 - Project name and description
 - Project type (package or research)
-- Author information
+- Author information (auto-filled from GitHub CLI if logged in)
 - License choice
 - etc.
 
 **With options:**
 ```bash
+# Create in a specific directory
+bblocks-projects create my-project
+
+# Create in current directory
+bblocks-projects create --here
+bblocks-projects create .
+
 # Create a package project with defaults
-bblocks-projects my-package --type package --defaults
+bblocks-projects create my-package --type package --defaults
 
 # Create using a specific template version
-bblocks-projects my-project --ref v1.0.0
+bblocks-projects create my-project --ref v1.0.0
 
 # Override specific values
-bblocks-projects my-project --data author_name="Jane Doe" --data author_email="jane@one.org"
+bblocks-projects create my-project --data author_name="Jane Doe" --data author_email="jane@one.org"
+
+# Skip GitHub auto-detection
+bblocks-projects create my-project --no-github
 ```
+
+**GitHub CLI Integration:**
+
+If you're logged into GitHub CLI (`gh auth login`), your author name, email, and username are automatically prefilled from your GitHub profile.
 
 ### Update an Existing Project
 
@@ -138,20 +156,26 @@ bblocks-projects add ruff
 Create a new ONE Campaign Python project.
 
 **Arguments:**
-- `DESTINATION` - Directory where the project will be created (required)
+- `DESTINATION` - Directory where the project will be created (optional - prompts if not provided)
 
 **Options:**
+- `--here, -H` - Create project in current directory instead of a subdirectory
 - `--ref, -r` - Template version (branch, tag, or commit). Defaults to 'main'
 - `--type, -t` - Project type: 'package' or 'research'
 - `--data, -d` - Override template variables in KEY=VALUE format (can be used multiple times)
 - `--defaults` - Use default answers for all questions
+- `--no-github` - Don't prefill author info from GitHub CLI
 
 **Examples:**
 ```bash
-bblocks-projects my-project
-bblocks-projects my-package --type package
-bblocks-projects my-project --ref v1.0.0
-bblocks-projects my-project --data author_name="John Doe"
+bblocks-projects create                    # Interactive - asks where to create
+bblocks-projects create my-project         # Create in new subdirectory
+bblocks-projects create --here             # Create in current directory
+bblocks-projects create .                  # Same as --here
+bblocks-projects create my-package --type package
+bblocks-projects create my-project --ref v1.0.0
+bblocks-projects create my-project --data author_name="John Doe"
+bblocks-projects create my-project --no-github
 ```
 
 ### `update`
@@ -215,8 +239,8 @@ The template creates a modern Python project with:
 ### For All Projects
 -  **uv** for fast dependency management
 -  **Ruff** for linting and formatting
--  **mypy** for type checking
--  **pre-commit** hooks configured
+-  **mypy** for type checking (with sensible, relaxed defaults)
+-  **pre-commit** hooks configured and auto-installed
 -  **GitHub Actions** CI/CD
 
 ### For Package Projects

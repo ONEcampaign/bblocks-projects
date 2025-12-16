@@ -45,6 +45,7 @@ dev = [
 {% endif %}
     "mypy>=1.8.0",
     "ruff>=0.3.0",
+    "pre-commit>=3.0.0",
 ]
 
 [tool.ruff]
@@ -106,14 +107,22 @@ line-ending = "auto"
 
 [tool.mypy]
 python_version = "{{ python_version }}"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
 {% if project_type == 'package' %}
 files = ["src/{{ project_slug }}"]
 {% else %}
 files = ["scripts/"]
 {% endif %}
+
+# Reasonable strictness (not full strict mode)
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_any_generics = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
 
 {% if project_type == 'package' %}
 [tool.pytest.ini_options]

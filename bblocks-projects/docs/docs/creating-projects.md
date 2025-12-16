@@ -7,10 +7,42 @@ Learn how to create new Python projects with bblocks-projects, customize them, a
 The simplest way to create a project:
 
 ```bash
-bblocks-projects create my-project
+bblocks-projects create
+```
+
+Running without arguments prompts you to choose where to create the project:
+
+```
+Where would you like to create the project?
+
+  1. Current directory (my-folder/)
+  2. New subdirectory
+
+Choice [1]:
 ```
 
 This starts an interactive session where you answer questions about your project. You choose the name, description, type, author info, Python version, and license.
+
+**Tip:** If you're logged into GitHub CLI (`gh auth login`), your author name, email, and GitHub username are automatically prefilled.
+
+### Create in Current Directory
+
+If you've already created and `cd`'d into a folder:
+
+```bash
+mkdir my-project && cd my-project
+bblocks-projects create --here
+# or
+bblocks-projects create .
+```
+
+### Create in New Subdirectory
+
+Specify the directory name directly:
+
+```bash
+bblocks-projects create my-project
+```
 
 ## Project Types
 
@@ -144,6 +176,29 @@ uv run python scripts/analyze_climate.py
 
 ## Customization Options
 
+### GitHub CLI Integration
+
+If you're logged into GitHub CLI, author info is automatically prefilled:
+
+```bash
+# Log in to GitHub (if not already)
+gh auth login
+
+# Create project - author info prefilled from GitHub
+bblocks-projects create my-project
+```
+
+Detected fields:
+- `author_name` - Your GitHub profile name
+- `author_email` - Your GitHub email (if public)
+- `github_username` - Your GitHub login
+
+To skip GitHub detection:
+
+```bash
+bblocks-projects create my-project --no-github
+```
+
 ### Use Defaults
 
 Skip all questions by using defaults:
@@ -156,7 +211,7 @@ This uses sensible defaults:
 - Project type: package
 - Python version: 3.11
 - License: MIT
-- Author: From git config
+- Author: From GitHub CLI (if logged in) or git config
 
 ### Override Specific Values
 
@@ -257,7 +312,11 @@ Static type checking:
 uv run mypy src/  # or scripts/ for research
 ```
 
-Configured in strict mode for maximum safety.
+Configured with sensible defaults that balance safety and practicality:
+- Untyped functions allowed (but if you start typing, finish it)
+- Bare generics like `list` allowed (not required to write `list[int]`)
+- Logic inside untyped functions still checked
+- Redundant casts and unused ignores flagged
 
 ### pre-commit - Automatic Checks
 

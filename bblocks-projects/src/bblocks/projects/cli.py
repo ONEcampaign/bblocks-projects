@@ -1,5 +1,7 @@
 """Command-line interface for bblocks-projects."""
 
+import json
+import subprocess
 from pathlib import Path
 
 import typer
@@ -25,12 +27,63 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def get_github_user_info() -> dict[str, str]:
+    """Get user info from GitHub CLI if available and authenticated.
+
+    Returns:
+        Dictionary with author_name, author_email, and github_username if available.
+    """
+    info: dict[str, str] = {}
+
+    try:
+        # Check if gh is installed and user is authenticated
+        result = subprocess.run(
+            ["gh", "auth", "status"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode != 0:
+            return info
+
+        # Get user info from GitHub API
+        result = subprocess.run(
+            ["gh", "api", "user"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return info
+
+        user_data = json.loads(result.stdout)
+
+        # Extract relevant fields
+        if user_data.get("name"):
+            info["author_name"] = user_data["name"]
+        if user_data.get("email"):
+            info["author_email"] = user_data["email"]
+        if user_data.get("login"):
+            info["github_username"] = user_data["login"]
+
+    except (subprocess.TimeoutExpired, FileNotFoundError, json.JSONDecodeError):
+        # gh not installed, timed out, or returned invalid JSON
+        pass
+
+    return info
+
+
 @app.command()
 def create(
-    destination: Path = typer.Argument(
-        ...,
-        help="Directory where the project will be created",
-        exists=False,
+    destination: Path | None = typer.Argument(
+        None,
+        help="Directory for the project (use '.' or --here for current dir)",
+    ),
+    here: bool = typer.Option(
+        False,
+        "--here",
+        "-H",
+        help="Create project in current directory instead of a subdirectory",
     ),
     template_ref: str | None = typer.Option(
         None,
@@ -55,30 +108,99 @@ def create(
         "--defaults",
         help="Use default answers for all questions",
     ),
+    no_github: bool = typer.Option(
+        False,
+        "--no-github",
+        help="Don't prefill author info from GitHub CLI",
+    ),
 ) -> None:
     """Create a new ONE Campaign Python project.
 
+    If you're logged into GitHub CLI (gh), author info will be prefilled.
+
     Examples:
 
-        # Create a new project (interactive)
-        bblocks-projects my-awesome-project
+        # Interactive mode (asks where to create)
+        bblocks-projects create
+
+        # Create in a new subdirectory
+        bblocks-projects create my-awesome-project
+
+        # Create in current directory
+        bblocks-projects create --here
+        bblocks-projects create .
 
         # Create a package project with defaults
-        bblocks-projects my-package --type package --defaults
+        bblocks-projects create my-package --type package --defaults
 
         # Create using a specific template version
-        bblocks-projects my-project --ref v1.0.0
+        bblocks-projects create my-project --ref v1.0.0
 
         # Override template variables
-        bblocks-projects my-project --data author_name="Jane Doe"
+        bblocks-projects create my-project --data author_name="Jane Doe"
+
+        # Skip GitHub detection
+        bblocks-projects create my-project --no-github
     """
+    # Handle --here flag or '.' as destination
+    if here:
+        destination = Path.cwd()
+    elif destination is None:
+        # Ask user interactively
+        console.print("\n[bold]Where would you like to create the project?[/bold]\n")
+        console.print(f"  [cyan]1.[/cyan] Current directory ({Path.cwd().name}/)")
+        console.print("  [cyan]2.[/cyan] New subdirectory")
+        choice = typer.prompt("\nChoice", default="1")
+
+        if choice == "1":
+            destination = Path.cwd()
+        else:
+            dir_name = typer.prompt("Directory name")
+            destination = Path.cwd() / dir_name
+    elif str(destination) == ".":
+        destination = Path.cwd()
+
+    # Check if destination exists as a file (not a directory)
+    if destination.exists() and destination.is_file():
+        console.print(
+            f"[bold red]Error:[/bold red] '{destination}' is a file, not a directory."
+        )
+        raise typer.Exit(code=1)
+
+    # Check if destination exists and has files
+    if destination.exists() and destination.is_dir() and any(destination.iterdir()):
+        # Check for non-hidden files (allow .git, etc.)
+        non_hidden = [f for f in destination.iterdir() if not f.name.startswith(".")]
+        if non_hidden:
+            console.print(
+                f"[bold yellow]Warning:[/bold yellow] Directory '{destination}' "
+                "is not empty."
+            )
+            if not typer.confirm("Continue anyway? Files may be overwritten."):
+                raise typer.Exit(code=0)
+
     console.print(TEMPLATE_DESCRIPTION)
     console.print(f"\n[bold green]Creating project at:[/bold green] {destination}")
 
-    # Prepare data overrides
-    data_dict = {}
+    # Try to get defaults from GitHub CLI
+    github_info: dict[str, str] = {}
+    if not no_github:
+        github_info = get_github_user_info()
+        if github_info:
+            gh_user = github_info.get("github_username", "unknown")
+            console.print(f"\n[dim]Detected GitHub user: {gh_user}[/dim]")
+
+    # Prepare data overrides (GitHub info as base, then explicit overrides)
+    data_dict: dict[str, str] = {}
+
+    # Start with GitHub-detected values as defaults
+    data_dict.update(github_info)
+
+    # Add project_type if specified
     if project_type:
         data_dict["project_type"] = project_type
+
+    # Explicit --data overrides take precedence
     if data:
         for item in data:
             if "=" not in item:
@@ -198,9 +320,7 @@ def update(
             skip_answered=skip_answered,
             unsafe=True,  # Allow template tasks
         )
-        console.print(
-            "\n[bold green]✓[/bold green] Project updated successfully!"
-        )
+        console.print("\n[bold green]✓[/bold green] Project updated successfully!")
         console.print("\n[bold]Next steps:[/bold]")
         console.print("  git diff  # Review changes")
         console.print("  uv sync   # Update dependencies if needed")
@@ -308,9 +428,7 @@ def add(
         component = get_component(component_name)
 
         if component is None:
-            console.print(
-                f"\n[bold red]Unknown component:[/bold red] {component_name}"
-            )
+            console.print(f"\n[bold red]Unknown component:[/bold red] {component_name}")
             console.print(
                 "\nAvailable components: pre-commit, ruff, ci, pytest, pypi-publish"
             )

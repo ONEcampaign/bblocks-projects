@@ -71,13 +71,10 @@ def show_config_diff(
     for section, content in updates.items():
         if section in existing:
             console.print(
-                f"\n[yellow]Will merge into existing:[/yellow] "
-                f"[tool.{section}]"
+                f"\n[yellow]Will merge into existing:[/yellow] [tool.{section}]"
             )
         else:
-            console.print(
-                f"\n[green]Will add new section:[/green] [tool.{section}]"
-            )
+            console.print(f"\n[green]Will add new section:[/green] [tool.{section}]")
 
         # Show the content
         toml_str = toml.dumps({section: content})
@@ -145,8 +142,7 @@ def install_component(
 
         if dest_path.exists() and not force:
             console.print(
-                f"[yellow]Skipping existing file:[/yellow] "
-                f"{file_spec.destination}"
+                f"[yellow]Skipping existing file:[/yellow] {file_spec.destination}"
             )
             continue
 

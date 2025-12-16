@@ -67,18 +67,14 @@ repos:
           )$
 
   # ---------------------------------------------------------------------------
-  # Type checking
+  # Type checking (uses settings from pyproject.toml)
   # ---------------------------------------------------------------------------
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
         additional_dependencies: []
-{% if project_type == 'package' %}
-        args: [--install-types, --non-interactive, --strict, --check-untyped-defs]
-{% else %}
-        args: [--install-types, --non-interactive, --strict]
-{% endif %}
+        args: [--install-types, --non-interactive]
 
   # ---------------------------------------------------------------------------
   # Spelling (docs + code comments)

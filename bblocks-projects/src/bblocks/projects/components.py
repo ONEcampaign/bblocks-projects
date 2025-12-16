@@ -126,9 +126,12 @@ class PreCommitComponent(Component):
 
     def get_files(self, project: Project) -> list[ComponentFile]:
         """Get pre-commit config file."""
-        template = """repos:
+        template = """# Pre-commit hooks configuration
+# Uses settings from pyproject.toml for mypy
+
+repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -137,10 +140,10 @@ class PreCommitComponent(Component):
       - id: check-merge-conflict
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
+    rev: v0.8.4
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--fix]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -148,6 +151,7 @@ class PreCommitComponent(Component):
     hooks:
       - id: mypy
         additional_dependencies: []
+        args: [--install-types, --non-interactive]
 """
         return [
             ComponentFile(
@@ -352,8 +356,7 @@ class PytestComponent(Component):
                 "testpaths": ["tests"],
                 "python_files": ["test_*.py"],
                 "addopts": (
-                    f"-v --cov=src/{package_name} --cov-report=term "
-                    "--cov-report=xml"
+                    f"-v --cov=src/{package_name} --cov-report=term --cov-report=xml"
                 ),
             },
             "tool.coverage.run": {

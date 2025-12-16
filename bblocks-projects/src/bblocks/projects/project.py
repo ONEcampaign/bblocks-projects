@@ -114,8 +114,7 @@ class Project:
 
         if not self.has_pyproject():
             errors.append(
-                "No pyproject.toml found. This doesn't appear to be a "
-                "Python project."
+                "No pyproject.toml found. This doesn't appear to be a Python project."
             )
 
         if not self.uses_uv():

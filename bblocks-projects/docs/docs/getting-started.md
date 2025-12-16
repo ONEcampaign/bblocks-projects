@@ -50,6 +50,14 @@ Let's create a simple data analysis project:
 uvx bblocks-projects create my-data-analysis
 ```
 
+Or run without arguments to choose interactively:
+
+```bash
+uvx bblocks-projects create
+```
+
+This prompts you to create in the current directory or a new subdirectory.
+
 You'll see a series of questions to customize your project:
 
 ```
@@ -84,12 +92,14 @@ You'll see a series of questions to customize your project:
    [1]
 ```
 
+**Tip:** If you're logged into GitHub CLI (`gh auth login`), your name, email, and username are automatically prefilled!
+
 After you answer the questions, bblocks-projects automatically:
 
 1. Generates all project files
 2. Initialises a git repository
 3. Creates a virtual environment
-4. Installs dependencies
+4. Installs dependencies (including pre-commit)
 5. Sets up pre-commit hooks
 6. Makes the initial commit
 

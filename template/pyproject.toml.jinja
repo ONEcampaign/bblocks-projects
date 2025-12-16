@@ -114,6 +114,7 @@ files = ["scripts/"]
 {% endif %}
 
 # Reasonable strictness (not full strict mode)
+ignore_missing_imports = true  # Don't error on untyped third-party packages
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false

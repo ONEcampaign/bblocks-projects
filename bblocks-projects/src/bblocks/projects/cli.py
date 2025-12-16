@@ -160,8 +160,15 @@ def create(
     elif str(destination) == ".":
         destination = Path.cwd()
 
+    # Check if destination exists as a file (not a directory)
+    if destination.exists() and destination.is_file():
+        console.print(
+            f"[bold red]Error:[/bold red] '{destination}' is a file, not a directory."
+        )
+        raise typer.Exit(code=1)
+
     # Check if destination exists and has files
-    if destination.exists() and any(destination.iterdir()):
+    if destination.exists() and destination.is_dir() and any(destination.iterdir()):
         # Check for non-hidden files (allow .git, etc.)
         non_hidden = [f for f in destination.iterdir() if not f.name.startswith(".")]
         if non_hidden:

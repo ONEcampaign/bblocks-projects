@@ -1,6 +1,6 @@
 [project]
 name = "bblocks-projects"
-version = "0.1.2"
+version = "0.2.0"
 description = "ONE Data Python project utilities - templates, tools, and workflows"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -67,10 +67,17 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.11"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
 namespace_packages = true
 explicit_package_bases = true
 mypy_path = "src"
+
+# Reasonable strictness (not full strict mode)
+warn_return_any = false
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_any_generics = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true

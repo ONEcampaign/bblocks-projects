@@ -402,7 +402,12 @@ def add(
     if list_available:
         console.print("\n[bold]Available components:[/bold]\n")
         for comp in list_components():
-            console.print(f"  • [cyan]{comp.name}[/cyan] - {comp.description}")
+            badge = (
+                f" [dim]({comp.requires_project_type} only)[/dim]"
+                if comp.requires_project_type
+                else ""
+            )
+            console.print(f"  • [cyan]{comp.name}[/cyan] - {comp.description}{badge}")
         console.print()
         return
 

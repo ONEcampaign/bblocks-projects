@@ -1,5 +1,6 @@
 """Project analysis and detection utilities."""
 
+import re
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
@@ -34,6 +35,10 @@ class Project:
             else:
                 self._pyproject_data = {}
         return self._pyproject_data
+
+    def reload_pyproject(self) -> None:
+        """Drop the cached pyproject.toml so the next access re-reads from disk."""
+        self._pyproject_data = None
 
     def has_pyproject(self) -> bool:
         """Check if project has pyproject.toml."""
@@ -79,6 +84,18 @@ class Project:
         project_data = self.pyproject_data.get("project", {})
         name = project_data.get("name") if isinstance(project_data, dict) else None
         return name if isinstance(name, str) else None
+
+    def get_project_slug(self) -> str:
+        """Get Python-identifier form of project name (hyphens → underscores)."""
+        return (self.get_project_name() or "project").replace("-", "_")
+
+    def get_python_version(self) -> str:
+        """Get minimum Python version from requires-python (e.g., '3.11')."""
+        requires = self.pyproject_data.get("project", {}).get(
+            "requires-python", ">=3.11"
+        )
+        match = re.search(r"(\d+)\.(\d+)", requires)
+        return f"{match.group(1)}.{match.group(2)}" if match else "3.11"
 
     def has_dependency(self, name: str) -> bool:
         """Check if project has a dependency."""

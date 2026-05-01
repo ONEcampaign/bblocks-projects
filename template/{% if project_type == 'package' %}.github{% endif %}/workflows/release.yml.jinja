@@ -45,6 +45,9 @@ jobs:
       name: pypi
       url: https://pypi.org/project/{{ project_slug }}
     steps:
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+
       - name: Download build artifacts
         uses: actions/download-artifact@v8
         with:

@@ -1,18 +1,26 @@
 """Component installation logic."""
 
 import subprocess
+import tempfile
+from pathlib import Path
 from typing import Any
 
+import copier
 import tomlkit
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.syntax import Syntax
 
-from bblocks.projects.components import Component
+from bblocks.projects.components import ComponentDef
+from bblocks.projects.config import DEFAULT_REF, TEMPLATE_URL
 from bblocks.projects.project import Project
 
 console = Console()
+
+
+class ConfigMergeError(ValueError):
+    """Raised when merge_config_sections encounters a type mismatch at a leaf key."""
 
 
 def merge_config_sections(
@@ -43,10 +51,15 @@ def merge_config_sections(
                 for item in value:
                     if item not in result[key]:
                         result[key].append(item)
-            else:
-                # Different types or values - keep existing by default
-                # This case should be handled by confirmation logic
+            elif type(result[key]) is type(value):
+                # Same-type scalars — component wins (pre-F8 merge semantic).
                 result[key] = value
+            else:
+                raise ConfigMergeError(
+                    f"Type mismatch at {current_path}: existing is "
+                    f"{type(result[key]).__name__}, component requires "
+                    f"{type(value).__name__}"
+                )
         else:
             # New key - add it
             result[key] = value
@@ -83,9 +96,118 @@ def show_config_diff(
         console.print(Panel(syntax, border_style="dim"))
 
 
+def can_install_component(comp: ComponentDef, project: Project) -> tuple[bool, str]:
+    """Check if a component can be installed into a project.
+
+    Args:
+        comp: Component definition
+        project: Target project
+
+    Returns:
+        Tuple of (can_install, reason)
+    """
+    requires = comp.requires_project_type
+    if requires is not None and project.detect_type() != requires:
+        return False, f"{comp.name} component is only for {requires} projects"
+    return True, ""
+
+
+def get_conflicts(comp: ComponentDef, project: Project) -> list[str]:
+    """Get list of conflicting files/configs for a component.
+
+    Args:
+        comp: Component definition
+        project: Target project
+
+    Returns:
+        List of conflict descriptions
+    """
+    conflicts = [
+        f"File exists: {relpath.removesuffix('.jinja')}"
+        for relpath in comp.template_files
+        if project.has_file(relpath.removesuffix(".jinja"))
+    ]
+    conflicts.extend(
+        f"Config section exists: {section}"
+        for section in comp.pyproject_sections
+        if project.has_config_section(section) and section != "build-system"
+    )
+    return conflicts
+
+
+def _copier_run_copy(**kwargs: Any) -> None:
+    """Indirection over copier.run_copy so tests can stub without hitting the network."""
+    copier.run_copy(**kwargs)
+
+
+def _render_template_to_tempdir(project: Project, tempdir: Path) -> None:
+    """Render the template into the caller-provided tempdir."""
+    project_type = project.detect_type()
+    if project_type == "unknown":
+        project_type = "package"  # copier.yml only accepts package|research
+    _copier_run_copy(
+        src_path=TEMPLATE_URL,
+        dst_path=str(tempdir),
+        vcs_ref=DEFAULT_REF,
+        data={
+            "project_name": project.get_project_name() or "project",
+            "project_slug": project.get_project_slug(),
+            "project_description": "",
+            "project_type": project_type,
+            "python_version": project.get_python_version(),
+            "author_name": "",
+            "author_email": "",
+            "license": "mit",
+            "github_username": "",
+        },
+        defaults=True,
+        quiet=True,
+        skip_tasks=True,
+        unsafe=False,
+        overwrite=False,
+    )
+
+
+def _extract_pyproject_sections(
+    rendered_pyproject: Path, section_paths: list[str]
+) -> dict[str, Any]:
+    """Read a rendered pyproject.toml and return the named sections as a single merged nested dict.
+
+    Returns a nested dict (e.g. {"tool": {"ruff": {...}}, "build-system": {...}}).
+    Sections absent from the rendered file are silently skipped.
+    """
+    paths_by_depth = sorted(section_paths, key=lambda p: p.count("."))
+
+    with open(rendered_pyproject, encoding="utf-8") as f:
+        data: Any = tomlkit.load(f)
+
+    result: dict[str, Any] = {}
+    for path in paths_by_depth:
+        parts = path.split(".")
+        source = data
+        try:
+            for part in parts:
+                source = source[part]
+        except (KeyError, TypeError):
+            continue
+
+        target = result
+        for part in parts[:-1]:
+            if part not in target:
+                target[part] = {}
+            target = target[part]
+        last = parts[-1]
+        if last not in target:
+            # shallower path may have already populated this; preserve it
+            target[last] = source.unwrap() if hasattr(source, "unwrap") else source
+
+    return result
+
+
 def install_component(
-    component: Component,
+    component: ComponentDef,
     project: Project,
+    *,
     force: bool = False,
     interactive: bool = True,
 ) -> bool:
@@ -104,13 +226,13 @@ def install_component(
     console.print(f"[dim]{component.description}[/dim]\n")
 
     # Check if can install
-    can_install, reason = component.can_install(project)
+    can_install, reason = can_install_component(component, project)
     if not can_install:
         console.print(f"[bold red]Cannot install:[/bold red] {reason}")
         return False
 
     # Check conflicts
-    conflicts = component.get_conflicts(project)
+    conflicts = get_conflicts(component, project)
     if conflicts and not force:
         console.print("[yellow]Conflicts detected:[/yellow]")
         for conflict in conflicts:
@@ -125,70 +247,83 @@ def install_component(
             console.print("[yellow]Use --force to overwrite existing files[/yellow]")
             return False
 
-    # Show what will be changed
-    config_updates = component.get_config_updates(project)
-    if config_updates:
-        existing_tool = project.pyproject_data.get("tool", {})
-        show_config_diff(component.name, existing_tool, config_updates)
+    with tempfile.TemporaryDirectory(prefix="bblocks-add-") as tempdir_str:
+        tempdir = Path(tempdir_str)
+        _render_template_to_tempdir(project, tempdir)
 
-        if interactive and not Confirm.ask("\nApply these config changes?"):
-            console.print("[yellow]Installation cancelled[/yellow]")
-            return False
-
-    # Install files
-    files_created = []
-    for file_spec in component.get_files(project):
-        dest_path = project.path / file_spec.destination
-
-        if dest_path.exists() and not force:
-            console.print(
-                f"[yellow]Skipping existing file:[/yellow] {file_spec.destination}"
-            )
-            continue
-
-        if file_spec.create_dirs:
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-
-        dest_path.write_text(file_spec.source_template, encoding="utf-8")
-        files_created.append(file_spec.destination)
-        console.print(f"[green]✓[/green] Created: {file_spec.destination}")
-
-    # Update pyproject.toml
-    if config_updates:
-        # Re-read with tomlkit so comments and formatting survive the round-trip;
-        # project.pyproject_data is a plain tomllib dict and would lose them.
-        # Typed Any: tomlkit's Container/Item return union is wider than the
-        # dict-like runtime behavior we rely on here.
-        with open(project.pyproject_path, encoding="utf-8") as f:
-            pyproject_data: Any = tomlkit.load(f)
-
-        if "tool" not in pyproject_data:
-            pyproject_data["tool"] = {}
-
-        for section_path, content in config_updates.items():
-            parts = section_path.split(".")
-            target = pyproject_data
-
-            for part in parts[:-1]:
-                if part not in target:
-                    target[part] = {}
-                target = target[part]
-
-            last_part = parts[-1]
-            if last_part in target:
-                target[last_part] = merge_config_sections(target[last_part], content)
+        config_updates: dict[str, Any] = {}
+        if component.pyproject_sections:
+            rendered_pyproject = tempdir / "pyproject.toml"
+            if rendered_pyproject.exists():
+                config_updates = _extract_pyproject_sections(
+                    rendered_pyproject, component.pyproject_sections
+                )
             else:
-                target[last_part] = content
+                console.print(
+                    "[yellow]Warning: rendered pyproject.toml not found — "
+                    "skipping config injection[/yellow]"
+                )
 
-        with open(project.pyproject_path, "w", encoding="utf-8") as f:
-            tomlkit.dump(pyproject_data, f)
-        console.print("[green]✓[/green] Updated: pyproject.toml")
+        if config_updates:
+            existing_tool = project.pyproject_data.get("tool", {})
+            if "tool" in config_updates:
+                show_config_diff(component.name, existing_tool, config_updates["tool"])
+            if "build-system" in config_updates:
+                console.print(
+                    f"[bold cyan]{component.name}[/bold cyan] will inject "
+                    "[build-system] section"
+                )
 
-        # Reload project data
-        project._pyproject_data = None
+            if interactive and not Confirm.ask("\nApply these config changes?"):
+                console.print("[yellow]Installation cancelled[/yellow]")
+                return False
+
+        for relpath in component.template_files:
+            dest_relpath = relpath.removesuffix(".jinja")
+            src_path = tempdir / dest_relpath
+            dest_path = project.path / dest_relpath
+
+            if not src_path.exists():
+                console.print(
+                    f"[yellow]Warning: rendered file not found in template:[/yellow] "
+                    f"{dest_relpath}"
+                )
+                continue
+
+            if dest_path.exists() and not force:
+                console.print(
+                    f"[yellow]Skipping existing file:[/yellow] {dest_relpath}"
+                )
+                continue
+
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
+            console.print(f"[green]✓[/green] Created: {dest_relpath}")
+
+        if config_updates:
+            with open(project.pyproject_path, encoding="utf-8") as f:
+                pyproject_data: Any = tomlkit.load(f)
+
+            for top_key, top_value in config_updates.items():
+                if top_key == "build-system" and project.has_config_section(
+                    "build-system"
+                ):
+                    continue
+                if top_key in pyproject_data and isinstance(top_value, dict):
+                    pyproject_data[top_key] = merge_config_sections(
+                        pyproject_data[top_key], top_value
+                    )
+                else:
+                    pyproject_data[top_key] = top_value
+
+            with open(project.pyproject_path, "w", encoding="utf-8") as f:
+                tomlkit.dump(pyproject_data, f)
+            console.print("[green]✓[/green] Updated: pyproject.toml")
+
+            project.reload_pyproject()
 
     # Add dependencies
-    dev_deps = component.get_dev_dependencies(project)
+    dev_deps = component.dev_deps
     if dev_deps:
         console.print("\n[bold]Dev dependencies to add:[/bold]")
         for dep in dev_deps:
@@ -209,7 +344,7 @@ def install_component(
                 console.print(f"  uv add --dev {' '.join(dev_deps)}")
 
     # Show post-install steps
-    steps = component.get_post_install_steps(project)
+    steps = component.post_install_steps
     if steps:
         console.print("\n[bold green]✓ Component installed successfully![/bold green]")
         console.print("\n[bold]Next steps:[/bold]")

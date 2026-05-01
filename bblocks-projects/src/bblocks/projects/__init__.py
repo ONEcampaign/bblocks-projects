@@ -1,4 +1,4 @@
-"""ONE Campaign Python project utilities."""
+"""Python project utilities from templates."""
 
 from importlib.metadata import version
 

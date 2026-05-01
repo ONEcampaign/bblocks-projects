@@ -28,7 +28,7 @@ def test_create_help() -> None:
     """Test create command help."""
     result = runner.invoke(app, ["create", "--help"])
     assert result.exit_code == 0
-    assert "Create a new ONE Campaign Python project" in result.stdout
+    assert "Create a new Python project from a template" in result.stdout
 
 
 def test_update_help() -> None:
@@ -43,3 +43,17 @@ def test_update_without_copier_answers(tmp_path: Path) -> None:
     result = runner.invoke(app, ["update", "--path", str(tmp_path)])
     assert result.exit_code == 1
     assert ".copier-answers.yml" in result.stdout
+
+
+def test_create_help_shows_template_flag() -> None:
+    """Test that create --help shows --template / -T flag."""
+    result = runner.invoke(app, ["create", "--help"])
+    assert result.exit_code == 0
+    assert "--template" in result.stdout
+
+
+def test_update_help_shows_template_flag() -> None:
+    """Test that update --help shows --template / -T flag."""
+    result = runner.invoke(app, ["update", "--help"])
+    assert result.exit_code == 0
+    assert "--template" in result.stdout

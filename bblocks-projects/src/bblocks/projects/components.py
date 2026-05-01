@@ -82,7 +82,7 @@ COMPONENTS_REGISTRY: dict[str, ComponentDef] = {
         post_install_steps=[
             "Register project on PyPI: https://pypi.org/manage/projects/",
             "Set up PyPI trusted publishing in project settings",
-            "Add GitHub as trusted publisher: ONEcampaign/<your-repo>",
+            "Add GitHub as trusted publisher: {github_username}/<your-repo>",
             "Specify workflow: release.yml",
             "Create a tag to publish: git tag v0.1.0 && git push origin v0.1.0",
         ],

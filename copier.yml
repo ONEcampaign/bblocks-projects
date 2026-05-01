@@ -59,7 +59,9 @@ license:
 # GitHub settings (for CI/CD)
 github_username:
   type: str
-  help: GitHub username or organization
+  help: >-
+    GitHub username or organisation used in CI/CD workflow files and PyPI trusted
+    publishing configuration. Override at CLI with: --data github_username=yourname
   when: "{{ project_type == 'package' }}"
 
 # Post-generation messages

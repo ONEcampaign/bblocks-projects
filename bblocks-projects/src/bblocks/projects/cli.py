@@ -1,6 +1,7 @@
 """Command-line interface for bblocks-projects."""
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -10,11 +11,17 @@ from copier.errors import CopierError
 from rich.console import Console
 
 from bblocks.projects import __version__
-from bblocks.projects.config import DEFAULT_REF, TEMPLATE_DESCRIPTION, TEMPLATE_URL
+from bblocks.projects.config import (
+    DEFAULT_REF,
+    TEMPLATE_DESCRIPTION,
+    TEMPLATE_ENV_VAR,
+    TEMPLATE_URL,
+    resolve_template_url,
+)
 
 app = typer.Typer(
     name="bblocks-projects",
-    help="ONE Campaign Python project utilities",
+    help="Python project utilities from templates",
     add_completion=False,
 )
 console = Console()
@@ -25,6 +32,18 @@ def version_callback(value: bool) -> None:
     if value:
         console.print(f"bblocks-projects version {__version__}")
         raise typer.Exit()
+
+
+def _announce_template_source(cli_template: str | None, resolved_url: str) -> None:
+    """Print the source of a non-default template URL when not set via CLI."""
+    if cli_template is not None or resolved_url == TEMPLATE_URL:
+        return
+    source = (
+        TEMPLATE_ENV_VAR
+        if os.environ.get(TEMPLATE_ENV_VAR) == resolved_url
+        else "config file"
+    )
+    console.print(f"[dim]Using template from {source}: {resolved_url}[/dim]")
 
 
 def get_github_user_info() -> dict[str, str]:
@@ -115,8 +134,14 @@ def create(
         "--no-github",
         help="Don't prefill author info from GitHub CLI",
     ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        "-T",
+        help=f"Template URL (default: {TEMPLATE_URL}). --ref still applies.",
+    ),
 ) -> None:
-    """Create a new ONE Campaign Python project.
+    """Create a new Python project from a template.
 
     If you're logged into GitHub CLI (gh), author info will be prefilled.
 
@@ -181,6 +206,9 @@ def create(
             if not typer.confirm("Continue anyway? Files may be overwritten."):
                 raise typer.Exit(code=0)
 
+    resolved_url = resolve_template_url(cli_override=template)
+    _announce_template_source(template, resolved_url)
+
     console.print(TEMPLATE_DESCRIPTION)
     console.print(f"\n[bold green]Creating project at:[/bold green] {destination}")
 
@@ -216,7 +244,7 @@ def create(
 
     try:
         run_copy(
-            src_path=TEMPLATE_URL,
+            src_path=resolved_url,
             dst_path=destination,
             vcs_ref=template_ref or DEFAULT_REF,
             data=data_dict if data_dict else None,
@@ -264,8 +292,14 @@ def update(
         "--skip-answered/--no-skip-answered",
         help="Skip questions that were already answered",
     ),
+    template: str | None = typer.Option(
+        None,
+        "--template",
+        "-T",
+        help=f"Template URL (default: {TEMPLATE_URL}). --ref still applies.",
+    ),
 ) -> None:
-    """Update an existing ONE Campaign project to the latest template version.
+    """Update an existing project to the latest template version.
 
     This command should be run from within the project directory or use --path.
 
@@ -287,6 +321,9 @@ def update(
         f"[bold cyan]Updating project at:[/bold cyan] {destination.absolute()}"
     )
 
+    resolved_url = resolve_template_url(cli_override=template)
+    _announce_template_source(template, resolved_url)
+
     # Check if .copier-answers.yml exists
     copier_answers = destination / ".copier-answers.yml"
     if not copier_answers.exists():
@@ -294,10 +331,11 @@ def update(
             "[bold red]Error:[/bold red] No .copier-answers.yml found. "
             "This doesn't appear to be a project created with bblocks-projects."
         )
-        console.print(
-            "\nIf this is an existing project, see the adoption guide:\n"
-            "https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/usage/adopting-existing.md"
-        )
+        if resolved_url == TEMPLATE_URL:
+            console.print(
+                "\nIf this is an existing project, see the adoption guide:\n"
+                "https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/usage/adopting-existing.md"
+            )
         raise typer.Exit(code=1)
 
     # Prepare data overrides
@@ -479,7 +517,7 @@ def main(
         help="Show version and exit",
     ),
 ) -> None:
-    """Create and update ONE Campaign Python projects from templates."""
+    """Create and update Python projects from templates."""
     pass
 
 

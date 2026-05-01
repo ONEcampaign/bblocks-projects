@@ -13,7 +13,7 @@ from rich.prompt import Confirm
 from rich.syntax import Syntax
 
 from bblocks.projects.components import ComponentDef
-from bblocks.projects.config import DEFAULT_REF, TEMPLATE_URL
+from bblocks.projects.config import DEFAULT_REF, resolve_template_url
 from bblocks.projects.project import Project
 
 console = Console()
@@ -140,13 +140,15 @@ def _copier_run_copy(**kwargs: Any) -> None:
     copier.run_copy(**kwargs)
 
 
-def _render_template_to_tempdir(project: Project, tempdir: Path) -> None:
+def _render_template_to_tempdir(
+    project: Project, tempdir: Path, *, template_url: str
+) -> None:
     """Render the template into the caller-provided tempdir."""
     project_type = project.detect_type()
     if project_type == "unknown":
         project_type = "package"  # copier.yml only accepts package|research
     _copier_run_copy(
-        src_path=TEMPLATE_URL,
+        src_path=template_url,
         dst_path=str(tempdir),
         vcs_ref=DEFAULT_REF,
         data={
@@ -204,6 +206,16 @@ def _extract_pyproject_sections(
     return result
 
 
+def _render_post_install_steps(
+    component: ComponentDef, project: Project, steps: list[str]
+) -> list[str]:
+    """Substitute project-derived placeholders into post-install step strings."""
+    if component.name != "pypi-publish":
+        return steps
+    username = project.get_github_username() or "<YOUR-GITHUB-USERNAME>"
+    return [step.replace("{github_username}", username) for step in steps]
+
+
 def install_component(
     component: ComponentDef,
     project: Project,
@@ -249,7 +261,9 @@ def install_component(
 
     with tempfile.TemporaryDirectory(prefix="bblocks-add-") as tempdir_str:
         tempdir = Path(tempdir_str)
-        _render_template_to_tempdir(project, tempdir)
+        _render_template_to_tempdir(
+            project, tempdir, template_url=resolve_template_url()
+        )
 
         config_updates: dict[str, Any] = {}
         if component.pyproject_sections:
@@ -348,7 +362,8 @@ def install_component(
     if steps:
         console.print("\n[bold green]✓ Component installed successfully![/bold green]")
         console.print("\n[bold]Next steps:[/bold]")
-        for i, step in enumerate(steps, 1):
+        rendered_steps = _render_post_install_steps(component, project, steps)
+        for i, step in enumerate(rendered_steps, 1):
             console.print(f"  {i}. {step}")
 
     return True

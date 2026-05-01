@@ -5,6 +5,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from rich.console import Console
 
 console = Console()
@@ -120,6 +121,20 @@ class Project:
                 return False
             data = data[part]
         return True
+
+    def get_github_username(self) -> str | None:
+        """Read `github_username` from the project's .copier-answers.yml."""
+        answers_path = self.path / ".copier-answers.yml"
+        if not answers_path.is_file():
+            return None
+        try:
+            data = yaml.safe_load(answers_path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        value = data.get("github_username")
+        return value if isinstance(value, str) and value else None
 
     def validate_for_component(self) -> tuple[bool, list[str]]:
         """Validate project is ready for component installation.

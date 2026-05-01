@@ -37,7 +37,7 @@ Start a new Python project with one command. No configuration needed:
 uvx bblocks-projects my-data-analysis
 ```
 
-You get a complete project structure with uv, Ruff, mypy, pre-commit hooks, and GitHub Actions CI/CD - all configured and ready to use.
+You get a complete project structure with uv, Ruff, ty, pre-commit hooks, and GitHub Actions CI/CD - all configured and ready to use.
 
 Choose between:
 - **Package projects** - For packages you'll publish to PyPI
@@ -68,7 +68,7 @@ bblocks-projects add ruff ci pytest
 
 Available components:
 
-- **pre-commit** - Pre-commit hooks with Ruff and mypy
+- **pre-commit** - Pre-commit hooks with Ruff and ty
 - **ruff** - Linter and formatter with comprehensive rules
 - **ci** - GitHub Actions CI workflow
 - **pytest** - Testing with coverage reporting
@@ -82,7 +82,7 @@ Every project includes:
 
 - **[uv](https://docs.astral.sh/uv/)** - Fast dependency management 
 - **[Ruff](https://docs.astral.sh/ruff/)** - Lightning-fast linting and formatting
-- **[mypy](https://mypy.readthedocs.io/)** - Static type checking
+- **[ty](https://docs.astral.sh/ty/)** - Static type checking
 - **[pre-commit](https://pre-commit.com/)** - Automatic quality checks before commits
 - **[GitHub Actions](https://github.com/features/actions)** - CI/CD pipelines
 

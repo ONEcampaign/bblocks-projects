@@ -303,20 +303,16 @@ Configured with comprehensive rules:
 - pyupgrade (modernization)
 - Google-style docstrings
 
-### mypy - Type Checking
+### ty - Type Checking
 
-Static type checking:
+Static type checking with [ty](https://docs.astral.sh/ty/), Astral's fast type checker:
 
 ```bash
 # Check types
-uv run mypy src/  # or scripts/ for research
+uvx ty check src/  # or scripts/ for research
 ```
 
-Configured with sensible defaults that balance safety and practicality:
-- Untyped functions allowed (but if you start typing, finish it)
-- Bare generics like `list` allowed (not required to write `list[int]`)
-- Logic inside untyped functions still checked
-- Redundant casts and unused ignores flagged
+ty is 10–100× faster than mypy and shares the same ecosystem as uv and ruff. Note: ty is currently pre-1.0; the API may evolve.
 
 ### pre-commit - Automatic Checks
 
@@ -333,7 +329,7 @@ git commit -m "Add feature"
 Configured hooks:
 - Ruff linting
 - Ruff formatting
-- mypy type checking
+- ty type checking
 - Trailing whitespace removal
 - YAML/TOML validation
 

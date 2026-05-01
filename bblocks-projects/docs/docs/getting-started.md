@@ -250,7 +250,7 @@ uv run ruff check --fix .
 ### Type Checking
 
 ```bash
-uv run mypy scripts/
+uvx ty check scripts/
 ```
 
 ### Pre-commit Hooks
@@ -267,7 +267,7 @@ You'll see:
 ```
 ruff.................................................Passed
 ruff-format..........................................Passed
-mypy.................................................Passed
+ty...................................................Passed
 [main abc123] Add my first analysis
  1 file changed, 15 insertions(+)
 ```

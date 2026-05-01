@@ -1,9 +1,9 @@
 """Project analysis and detection utilities."""
 
+import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-import toml
 from rich.console import Console
 
 console = Console()
@@ -29,8 +29,8 @@ class Project:
         """Load and cache pyproject.toml data."""
         if self._pyproject_data is None:
             if self.pyproject_path.exists():
-                with open(self.pyproject_path, encoding="utf-8") as f:
-                    self._pyproject_data = toml.load(f)
+                with open(self.pyproject_path, "rb") as f:
+                    self._pyproject_data = tomllib.load(f)
             else:
                 self._pyproject_data = {}
         return self._pyproject_data

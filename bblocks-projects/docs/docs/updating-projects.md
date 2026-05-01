@@ -46,7 +46,7 @@ These files are managed by the template and get updated:
 - `.github/workflows/` - CI/CD workflows
 - `.pre-commit-config.yaml` - Pre-commit configuration
 - `.gitignore` - Ignore patterns
-- Parts of `pyproject.toml` - Tool configurations (ruff, mypy, etc.)
+- Parts of `pyproject.toml` - Tool configurations (ruff, ty, etc.)
 
 ### Never Touched
 
@@ -244,7 +244,7 @@ uv run pytest
 
 # Check code quality
 uv run ruff check .
-uv run mypy src/  # or scripts/ for research
+uvx ty check src/  # or scripts/ for research
 
 # Try pre-commit
 uv run pre-commit run --all-files
@@ -357,9 +357,8 @@ git diff
 # Update ruff config if needed
 uv run ruff check --fix .
 
-# Regenerate mypy cache
-rm -rf .mypy_cache
-uv run mypy src/
+# Re-run type checking
+uvx ty check src/
 
 # Update pre-commit
 uv run pre-commit autoupdate
@@ -457,7 +456,7 @@ git commit -m "Update from template"
 uv sync
 uv run pytest
 uv run ruff check .
-uv run mypy src/
+uvx ty check src/
 ```
 
 ### 3. Update Regularly

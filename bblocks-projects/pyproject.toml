@@ -23,7 +23,7 @@ dependencies = [
     "copier>=9.0.0",
     "typer>=0.12.0",
     "rich>=13.0.0",
-    "toml>=0.10.2",
+    "tomlkit>=0.14.0",
 ]
 
 [project.urls]
@@ -38,8 +38,7 @@ bblocks-projects = "bblocks.projects.cli:app"
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.8.0",
-    "mypy>=1.11.0",
-    "types-toml>=0.10.8.20240310",
+    "ty>=0.0.33",
     "mkdocs-material>=9.0.0",
 ]
 
@@ -50,34 +49,39 @@ build-backend = "setuptools.build_meta"
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+extend-include = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
+    "E", "W", "F",   # pycodestyle, pyflakes
+    "I",              # isort
+    "N",              # pep8-naming
+    "UP",             # pyupgrade
+    "B",              # bugbear
+    "C4",             # comprehensions
+    "SIM",            # simplify
+    "PL",             # pylint
+    "RUF",            # ruff-specific
+    "ERA",            # eradicate (commented-out code)
+    "PERF",           # perflint
+    "ANN",            # flake8-annotations (require type hints on public APIs)
 ]
 ignore = [
-    "B008",  # Function call in argument defaults (standard for Typer CLI)
+    "E501",      # Line length (formatter handles)
+    "B008",      # Function call in argument defaults (standard for Typer CLI)
+    "PLR0913",   # Too many arguments
+    "PLR0912",   # Too many branches
+    "PLR0914",   # Too many locals
+    "PLR0915",   # Too many statements
+    "PLR2004",   # Magic values
+    "ANN401",    # Allow `Any` in typed signatures
 ]
 
-[tool.mypy]
-python_version = "3.11"
-namespace_packages = true
-explicit_package_bases = true
-mypy_path = "src"
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ANN", "PLR2004"]
 
-# Reasonable strictness (not full strict mode)
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_any_generics = false
-warn_redundant_casts = true
-warn_unused_ignores = true
-no_implicit_optional = true
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.src]
+include = ["src"]

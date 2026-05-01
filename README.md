@@ -84,7 +84,7 @@ The template supports two project types:
 All projects include:
 - **uv** for fast dependency management
 - **Ruff** for linting and formatting
-- **mypy** for type checking
+- **ty** for type checking
 - **pre-commit** hooks
 - **GitHub Actions** CI/CD workflows
 

@@ -103,15 +103,16 @@ class Component(ABC):
         Returns:
             List of conflict descriptions
         """
-        conflicts = []
-        for file in self.get_files(project):
-            if project.has_file(file.destination):
-                conflicts.append(f"File exists: {file.destination}")
-
-        for section in self.get_config_updates(project):
-            if project.has_config_section(section):
-                conflicts.append(f"Config section exists: {section}")
-
+        conflicts = [
+            f"File exists: {file.destination}"
+            for file in self.get_files(project)
+            if project.has_file(file.destination)
+        ]
+        conflicts.extend(
+            f"Config section exists: {section}"
+            for section in self.get_config_updates(project)
+            if project.has_config_section(section)
+        )
         return conflicts
 
 
@@ -122,16 +123,15 @@ class PreCommitComponent(Component):
         """Initialize pre-commit component."""
         super().__init__()
         self.name = "pre-commit"
-        self.description = "Pre-commit hooks with ruff and mypy"
+        self.description = "Pre-commit hooks with ruff and ty"
 
     def get_files(self, project: Project) -> list[ComponentFile]:
         """Get pre-commit config file."""
         template = """# Pre-commit hooks configuration
-# Uses settings from pyproject.toml for mypy
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -140,18 +140,20 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: v0.15.12
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.8.0
+  - repo: local
     hooks:
-      - id: mypy
-        additional_dependencies: []
-        args: [--install-types, --non-interactive]
+      - id: ty
+        name: ty type check
+        language: system
+        entry: uvx ty check
+        types: [python]
+        pass_filenames: false
 """
         return [
             ComponentFile(
@@ -274,15 +276,15 @@ jobs:
         python-version: ['3.11', '3.12', '3.13']
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
 
       - name: Set up Python ${{{{ matrix.python-version }}}}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{{{ matrix.python-version }}}}
 
@@ -296,7 +298,7 @@ jobs:
         run: uv run ruff check {lint_paths}
 
       - name: Run type checking
-        run: uv run mypy {lint_paths}
+        run: uvx ty check {lint_paths}
 """
         return [
             ComponentFile(
@@ -314,7 +316,7 @@ jobs:
         return []
 
     def get_dev_dependencies(self, project: Project) -> list[str]:
-        """No dev dependencies (assumes ruff/mypy already added)."""
+        """No dev dependencies (assumes ruff/ty already added)."""
         return []
 
     def get_post_install_steps(self, project: Project) -> list[str]:
@@ -432,15 +434,15 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 

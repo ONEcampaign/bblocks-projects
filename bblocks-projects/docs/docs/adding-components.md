@@ -15,7 +15,7 @@ Output:
 ```
 Available components:
 
-  • pre-commit - Pre-commit hooks with ruff and mypy
+  • pre-commit - Pre-commit hooks with ruff and ty
   • ruff - Ruff linter and formatter with comprehensive rules
   • ci - GitHub Actions CI workflow
   • pytest - Pytest with coverage reporting (packages only)
@@ -53,7 +53,7 @@ Project Analysis:
   Uses uv: Yes
 
 Component: pre-commit
-Pre-commit hooks with ruff and mypy
+Pre-commit hooks with ruff and ty
 
 Will create:
   • .pre-commit-config.yaml
@@ -106,12 +106,12 @@ Pre-commit hooks that run before each commit.
 **What it does:**
 - Creates `.pre-commit-config.yaml`
 - Adds pre-commit to dev dependencies
-- Configures hooks for ruff, mypy, and common checks
+- Configures hooks for ruff, ty, and common checks
 
 **Hooks included:**
 - Ruff linting with auto-fix
 - Ruff formatting
-- mypy type checking
+- ty type checking
 - Trailing whitespace removal
 - YAML/TOML validation
 - Large file detection
@@ -136,7 +136,7 @@ git commit -m "Add feature"
 # Hooks run automatically:
 ruff...............................................Passed
 ruff-format........................................Passed
-mypy...............................................Passed
+ty.................................................Passed
 ```
 
 **When to use:**
@@ -204,7 +204,7 @@ GitHub Actions CI workflow.
 **Workflow includes:**
 - Running tests (pytest for packages)
 - Linting with ruff
-- Type checking with mypy
+- Type checking with ty
 - Uses GitHub's uv caching for speed
 
 **After installation:**
@@ -405,7 +405,7 @@ bblocks-projects add ci
 
 # CI will:
 # - Lint scripts/ directory
-# - Run mypy on scripts/
+# - Run ty on scripts/
 # - Skip tests (research projects don't have them)
 
 git add .github/workflows/ci.yml
@@ -689,7 +689,7 @@ Tell your team what you added:
 ```bash
 git commit -m "Add pre-commit hooks
 
-- Runs ruff and mypy before commits
+- Runs ruff and ty before commits
 - Catches issues before CI
 - Run: pre-commit install after pulling"
 ```

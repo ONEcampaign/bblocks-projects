@@ -33,7 +33,7 @@ classifiers = [
 
 {% if project_type == 'package' %}
 [build-system]
-requires = ["uv_build>=0.9.2,<0.10.0"]
+requires = ["uv_build>=0.11.8,<0.12"]
 build-backend = "uv_build"
 {% endif %}
 
@@ -43,7 +43,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
 {% endif %}
-    "mypy>=1.8.0",
+    "ty>=0.0.33",
     "ruff>=0.3.0",
     "pre-commit>=3.0.0",
 ]
@@ -51,6 +51,7 @@ dev = [
 [tool.ruff]
 line-length = 88
 target-version = "py{{ python_version|replace('.', '') }}"
+extend-include = ["*.ipynb"]
 
 exclude = [
     ".git",
@@ -65,6 +66,7 @@ exclude = [
 ]
 
 [tool.ruff.lint]
+{% if project_type == 'package' %}
 select = [
     "E", "W", "F",      # pycodestyle, pyflakes
     "I",                 # isort
@@ -75,55 +77,104 @@ select = [
     "SIM",               # simplify
     "PL",                # pylint
     "RUF",               # ruff-specific
-    "ERA",               # commented code
-    "PERF",              # performance
+    "ERA",               # eradicate (commented-out code)
+    "PERF",              # perflint
+    "ANN",               # flake8-annotations (require type hints on public APIs)
 ]
 
 ignore = [
-    "E501",    # Line length (formatter handles)
-    "PLR0913", # Too many arguments
-    "PLR2004", # Magic values
+    "E501",     # Line length (formatter handles)
+    "PLR0913",  # Too many arguments
+    "PLR0912",  # Too many branches
+    "PLR0914",  # Too many locals
+    "PLR0915",  # Too many statements
+    "PLR2004",  # Magic values
+    "ANN401",   # Allow `Any` in typed signatures
 ]
+{% else %}
+# Research projects use a looser rule set for exploratory analysis.
+# Dropped: N (pep8-naming bans X/y/df), SIM (rewrites hurt numerical clarity),
+# PL (complexity rules fire on legitimate analysis scripts), ERA (commented-out
+# code is normal during exploration), PERF (clarity > micro-opt in research),
+# ANN (annotations not enforced for one-off scripts).
+select = [
+    "E", "W", "F",      # pycodestyle, pyflakes
+    "I",                 # isort
+    "UP",                # pyupgrade
+    "B",                 # bugbear (real bug catches)
+    "C4",                # comprehensions
+    "RUF",               # ruff-specific
+]
+
+ignore = [
+    "E501",     # Line length (formatter handles)
+    "F841",     # Unused local — common during exploration
+]
+{% endif %}
 
 # Allow autofix for all enabled rules
 fixable = ["ALL"]
 unfixable = []
 
+[tool.ruff.lint.per-file-ignores]
+{% if project_type == 'package' %}
+# Tests don't need annotations or pylint-complexity gates.
+"tests/**/*.py" = ["ANN", "PLR2004"]
+# Notebooks: don't require annotations; allow REPL-style patterns.
+"**/*.ipynb" = ["ANN", "F401", "F811", "E402"]
+{% else %}
+# Scripts: research/exploration style — allow REPL-like patterns.
+"scripts/**/*.py" = [
+    "F401",   # Unused imports (kept for REPL convenience)
+    "F811",   # Redefinition (iterative work)
+    "E402",   # Imports after path/config setup
+]
+# Notebooks: same allowances plus longer output strings.
+"**/*.ipynb" = [
+    "F401",
+    "F811",
+    "E402",
+]
+{% endif %}
+
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
 [tool.ruff.format]
-# Use double quotes for strings
 quote-style = "double"
-
-# Use spaces for indentation
 indent-style = "space"
-
-# Like Black, respect magic trailing commas
 skip-magic-trailing-comma = false
-
-# Like Black, automatically detect line endings
 line-ending = "auto"
 
-[tool.mypy]
-python_version = "{{ python_version }}"
+[tool.ty.environment]
+python-version = "{{ python_version }}"
+
+[tool.ty.src]
 {% if project_type == 'package' %}
-files = ["src/{{ project_slug }}"]
+include = ["src/{{ project_slug }}"]
 {% else %}
-files = ["scripts/"]
+include = ["scripts/"]
 {% endif %}
 
-# Reasonable strictness (not full strict mode)
-ignore_missing_imports = true  # Don't error on untyped third-party packages
-warn_return_any = false
-warn_unused_configs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_any_generics = false
-warn_redundant_casts = true
-warn_unused_ignores = true
-no_implicit_optional = true
+{% if project_type == 'research' %}
+[tool.ty.analysis]
+# Replace pandas / numpy type information with `Any`. Eliminates the cascade
+# of false positives from those libraries' incomplete or absent stubs without
+# disabling type checking on your own code.
+# https://docs.astral.sh/ty/reference/configuration/
+replace-imports-with-any = [
+    "pandas",
+    "pandas.**",
+    "numpy",
+    "numpy.**",
+]
+
+[tool.ty.rules]
+# These warn-by-default rules fire frequently on dynamic dataframe / dict
+# patterns common in exploratory code. Demoted to ignore for research.
+possibly-missing-attribute = "ignore"
+possibly-unresolved-reference = "ignore"
+{% endif %}
 
 {% if project_type == 'package' %}
 [tool.pytest.ini_options]

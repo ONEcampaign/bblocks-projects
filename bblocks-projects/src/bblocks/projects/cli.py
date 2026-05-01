@@ -42,6 +42,7 @@ def get_github_user_info() -> dict[str, str]:
             capture_output=True,
             text=True,
             timeout=5,
+            check=False,
         )
         if result.returncode != 0:
             return info
@@ -52,6 +53,7 @@ def get_github_user_info() -> dict[str, str]:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode != 0:
             return info
@@ -387,9 +389,14 @@ def add(
         # List available components
         bblocks-projects add --list
     """
-    from bblocks.projects.components import get_component, list_components
-    from bblocks.projects.installer import install_component
-    from bblocks.projects.project import Project
+    # Deferred imports keep --help and --version fast; the heavy component
+    # machinery only loads when `add` is actually invoked.
+    from bblocks.projects.components import (  # noqa: PLC0415
+        get_component,
+        list_components,
+    )
+    from bblocks.projects.installer import install_component  # noqa: PLC0415
+    from bblocks.projects.project import Project  # noqa: PLC0415
 
     # List components if requested
     if list_available:

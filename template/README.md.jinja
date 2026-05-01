@@ -30,7 +30,7 @@ uv run ruff check .
 uv run ruff format .
 
 # Run type checker
-uv run mypy src/{{ project_slug }}
+uvx ty check src/{{ project_slug }}
 ```
 
 ### Building
@@ -67,7 +67,7 @@ uv run ruff check scripts/
 uv run ruff format scripts/
 
 # Run type checker
-uv run mypy scripts/
+uvx ty check scripts/
 ```
 {% endif %}
 

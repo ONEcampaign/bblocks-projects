@@ -99,7 +99,7 @@ _message_after_copy: |
   6. Run quality checks:
 
      $ uv run ruff check .
-     $ uv run mypy scripts/
+     $ uvx ty check scripts/
   {%- endif %}
 
 _message_after_update: |

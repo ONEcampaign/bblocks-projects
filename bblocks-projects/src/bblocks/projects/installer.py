@@ -1,8 +1,9 @@
 """Component installation logic."""
 
+import subprocess
 from typing import Any
 
-import toml
+import tomlkit
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
@@ -77,7 +78,7 @@ def show_config_diff(
             console.print(f"\n[green]Will add new section:[/green] [tool.{section}]")
 
         # Show the content
-        toml_str = toml.dumps({section: content})
+        toml_str = tomlkit.dumps({section: content})
         syntax = Syntax(toml_str, "toml", theme="monokai", line_numbers=False)
         console.print(Panel(syntax, border_style="dim"))
 
@@ -130,10 +131,9 @@ def install_component(
         existing_tool = project.pyproject_data.get("tool", {})
         show_config_diff(component.name, existing_tool, config_updates)
 
-        if interactive:
-            if not Confirm.ask("\nApply these config changes?"):
-                console.print("[yellow]Installation cancelled[/yellow]")
-                return False
+        if interactive and not Confirm.ask("\nApply these config changes?"):
+            console.print("[yellow]Installation cancelled[/yellow]")
+            return False
 
     # Install files
     files_created = []
@@ -155,33 +155,33 @@ def install_component(
 
     # Update pyproject.toml
     if config_updates:
-        pyproject_data = project.pyproject_data.copy()
+        # Re-read with tomlkit so comments and formatting survive the round-trip;
+        # project.pyproject_data is a plain tomllib dict and would lose them.
+        # Typed Any: tomlkit's Container/Item return union is wider than the
+        # dict-like runtime behavior we rely on here.
+        with open(project.pyproject_path, encoding="utf-8") as f:
+            pyproject_data: Any = tomlkit.load(f)
 
-        # Ensure tool section exists
         if "tool" not in pyproject_data:
             pyproject_data["tool"] = {}
 
-        # Merge config updates
         for section_path, content in config_updates.items():
             parts = section_path.split(".")
             target = pyproject_data
 
-            # Navigate to the target section
             for part in parts[:-1]:
                 if part not in target:
                     target[part] = {}
                 target = target[part]
 
-            # Merge the content
             last_part = parts[-1]
             if last_part in target:
                 target[last_part] = merge_config_sections(target[last_part], content)
             else:
                 target[last_part] = content
 
-        # Write updated pyproject.toml
         with open(project.pyproject_path, "w", encoding="utf-8") as f:
-            toml.dump(pyproject_data, f)
+            tomlkit.dump(pyproject_data, f)
         console.print("[green]✓[/green] Updated: pyproject.toml")
 
         # Reload project data
@@ -229,8 +229,6 @@ def _add_dependencies(
         dependencies: List of package specs
         dev: Whether these are dev dependencies
     """
-    import subprocess
-
     for dep in dependencies:
         # Check if already present
         dep_name = dep.split(">=")[0].split("==")[0]

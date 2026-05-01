@@ -114,7 +114,7 @@ bblocks-projects add ci --force
 ```
 
 **Available Components:**
-- **pre-commit** - Pre-commit hooks with ruff and mypy
+- **pre-commit** - Pre-commit hooks with ruff and ty
 - **ruff** - Ruff linter and formatter with comprehensive rules
 - **ci** - GitHub Actions CI workflow
 - **pytest** - Pytest with coverage reporting (packages only)
@@ -239,7 +239,7 @@ The template creates a modern Python project with:
 ### For All Projects
 -  **uv** for fast dependency management
 -  **Ruff** for linting and formatting
--  **mypy** for type checking (with sensible, relaxed defaults)
+-  **ty** for type checking (Astral's fast static type checker)
 -  **pre-commit** hooks configured and auto-installed
 -  **GitHub Actions** CI/CD
 

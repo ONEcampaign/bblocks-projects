@@ -51,8 +51,11 @@ def merge_config_sections(
                 for item in value:
                     if item not in result[key]:
                         result[key].append(item)
-            elif type(result[key]) is type(value):
-                # Same-type scalars — component wins (pre-F8 merge semantic).
+            elif isinstance(result[key], type(value)) or isinstance(
+                value, type(result[key])
+            ):
+                # Same logical type (handles tomlkit.String/Integer/etc.
+                # vs native str/int — both are subclass-related). Component wins.
                 result[key] = value
             else:
                 raise ConfigMergeError(
@@ -156,6 +159,7 @@ def _render_template_to_tempdir(
             "project_slug": project.get_project_slug(),
             "project_description": "",
             "project_type": project_type,
+            "include_notebooks": False,
             "python_version": project.get_python_version(),
             "author_name": "",
             "author_email": "",

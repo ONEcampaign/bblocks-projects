@@ -24,6 +24,12 @@ project_type:
     Research/Analysis: research
   default: package
 
+include_notebooks:
+  type: bool
+  help: Include a notebooks/ directory for Jupyter exploration?
+  default: false
+  when: "{{ project_type == 'research' }}"
+
 # Author info
 author_name:
   type: str
@@ -90,18 +96,38 @@ _message_after_copy: |
      - Create a git tag: git tag v0.1.0
      - Push the tag: git push origin v0.1.0
   {%- else -%}
-  3. Check out the example analysis script:
+  3. Install the project (creates an editable src/{{ project_slug }} package):
 
-     $ uv run python scripts/example_analysis.py
+     $ uv sync
 
-  4. Add your data files to raw_data/
+  4. Add your reusable analysis code under src/{{ project_slug }}/
 
-  5. Write your analysis scripts in scripts/
+  5. Add raw data to data/raw/ (gitignored — never commit source data)
 
-  6. Run quality checks:
+  6. Write processed/derived data to data/processed/ (tracked in git)
+  {% if include_notebooks %}
+  7. Add Jupyter notebooks under notebooks/ for exploration
+
+  8. Run quality checks:
 
      $ uv run ruff check .
-     $ uvx ty check scripts/
+     $ uvx ty check src/{{ project_slug }}
+
+  9. Optional: install pytest dev deps (config is already set up; merge will
+     report "Conflicts detected" — use --force to confirm a safe re-merge):
+
+     $ bblocks-projects add pytest --force
+  {% else %}
+  7. Run quality checks:
+
+     $ uv run ruff check .
+     $ uvx ty check src/{{ project_slug }}
+
+  8. Optional: install pytest dev deps (config is already set up; merge will
+     report "Conflicts detected" — use --force to confirm a safe re-merge):
+
+     $ bblocks-projects add pytest --force
+  {% endif %}
   {%- endif %}
 
 _message_after_update: |

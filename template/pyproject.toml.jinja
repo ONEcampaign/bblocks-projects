@@ -31,11 +31,9 @@ classifiers = [
 ]
 {% endif %}
 
-{% if project_type == 'package' %}
 [build-system]
 requires = ["uv_build>=0.11.8,<0.12"]
 build-backend = "uv_build"
-{% endif %}
 
 [dependency-groups]
 dev = [
@@ -123,18 +121,8 @@ unfixable = []
 # Notebooks: don't require annotations; allow REPL-style patterns.
 "**/*.ipynb" = ["ANN", "F401", "F811", "E402"]
 {% else %}
-# Scripts: research/exploration style — allow REPL-like patterns.
-"scripts/**/*.py" = [
-    "F401",   # Unused imports (kept for REPL convenience)
-    "F811",   # Redefinition (iterative work)
-    "E402",   # Imports after path/config setup
-]
-# Notebooks: same allowances plus longer output strings.
-"**/*.ipynb" = [
-    "F401",
-    "F811",
-    "E402",
-]
+# Notebooks: research/exploration style — allow REPL-like patterns.
+"**/*.ipynb" = ["F401", "F811", "E402"]
 {% endif %}
 
 [tool.ruff.lint.pydocstyle]
@@ -150,11 +138,7 @@ line-ending = "auto"
 python-version = "{{ python_version }}"
 
 [tool.ty.src]
-{% if project_type == 'package' %}
 include = ["src/{{ project_slug }}"]
-{% else %}
-include = ["scripts/"]
-{% endif %}
 
 {% if project_type == 'research' %}
 [tool.ty.analysis]
@@ -176,7 +160,6 @@ possibly-missing-attribute = "ignore"
 possibly-unresolved-reference = "ignore"
 {% endif %}
 
-{% if project_type == 'package' %}
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -202,4 +185,3 @@ exclude_lines = [
 ]
 show_missing = true
 precision = 2
-{% endif %}

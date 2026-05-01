@@ -25,6 +25,7 @@ class Project:
         self.path = path.resolve()
         self.pyproject_path = self.path / "pyproject.toml"
         self._pyproject_data: dict[str, Any] | None = None
+        self._copier_answers: dict[str, Any] | None = None
 
     @property
     def pyproject_data(self) -> dict[str, Any]:
@@ -61,8 +62,36 @@ class Project:
         """Check if project has .github/workflows/ directory."""
         return (self.path / ".github" / "workflows").is_dir()
 
+    @property
+    def copier_answers(self) -> dict[str, Any]:
+        """Load and cache `.copier-answers.yml` as a dict.
+
+        Returns an empty dict when the file is missing, unreadable, malformed,
+        or has a non-dict root. Cached for the lifetime of the Project, so
+        repeated callers (`detect_type`, `get_github_username`, plus the
+        `add` hot-path) only pay one stat + read + parse.
+        """
+        if self._copier_answers is None:
+            try:
+                data = yaml.safe_load(
+                    (self.path / ".copier-answers.yml").read_text(encoding="utf-8")
+                )
+            except (OSError, yaml.YAMLError):
+                data = None
+            self._copier_answers = data if isinstance(data, dict) else {}
+        return self._copier_answers
+
     def detect_type(self) -> ProjectType:
-        """Detect project type (package or research)."""
+        """Detect project type (package or research).
+
+        Consults .copier-answers.yml first (authoritative for bblocks-managed
+        projects). Falls back to filesystem heuristics if the file is missing
+        or malformed.
+        """
+        pt = self.copier_answers.get("project_type")
+        if pt in ("package", "research"):
+            return pt
+
         if not self.has_pyproject():
             return "unknown"
 
@@ -124,16 +153,7 @@ class Project:
 
     def get_github_username(self) -> str | None:
         """Read `github_username` from the project's .copier-answers.yml."""
-        answers_path = self.path / ".copier-answers.yml"
-        if not answers_path.is_file():
-            return None
-        try:
-            data = yaml.safe_load(answers_path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError):
-            return None
-        if not isinstance(data, dict):
-            return None
-        value = data.get("github_username")
+        value = self.copier_answers.get("github_username")
         return value if isinstance(value, str) and value else None
 
     def validate_for_component(self) -> tuple[bool, list[str]]:

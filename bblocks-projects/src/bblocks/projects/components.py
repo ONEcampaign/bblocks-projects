@@ -72,7 +72,7 @@ COMPONENTS_REGISTRY: dict[str, ComponentDef] = {
             "Run tests: uv run pytest",
             "View coverage: uv run pytest --cov",
         ],
-        requires_project_type="package",
+        requires_project_type=None,
     ),
     "pypi-publish": ComponentDef(
         name="pypi-publish",

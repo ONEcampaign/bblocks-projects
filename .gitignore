@@ -176,3 +176,4 @@ cython_debug/
 .cursorindexingignore
 /docs/plans
 /.claude
+/bblocks-projects/.claude

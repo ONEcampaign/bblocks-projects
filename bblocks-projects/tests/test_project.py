@@ -88,3 +88,30 @@ def test_detect_type_falls_back_when_project_type_unknown(
     """An unrecognized `project_type` value falls through to heuristic."""
     _write_answers(project_with_src, "project_type: data_engineering\n")
     assert Project(project_with_src).detect_type() == "package"
+
+
+def test_has_dev_dependency_reads_pep735_dependency_groups(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n'
+        '[dependency-groups]\ndev = ["pytest>=8", "ruff>=0.8"]\n',
+        encoding="utf-8",
+    )
+    project = Project(tmp_path)
+    assert project.has_dev_dependency("pytest")
+    assert project.has_dev_dependency("ruff")
+    assert not project.has_dev_dependency("mypy")
+
+
+def test_has_dev_dependency_falls_back_to_optional_dependencies_dev(
+    tmp_path: Path,
+) -> None:
+    """Pre-PEP-735 projects keep dev deps under project.optional-dependencies.dev."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n'
+        '[project.optional-dependencies]\ndev = ["pytest>=8", "ruff>=0.8"]\n',
+        encoding="utf-8",
+    )
+    project = Project(tmp_path)
+    assert project.has_dev_dependency("pytest")
+    assert project.has_dev_dependency("ruff")
+    assert not project.has_dev_dependency("mypy")

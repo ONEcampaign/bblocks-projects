@@ -133,9 +133,21 @@ class Project:
         return any(name in dep for dep in deps)
 
     def has_dev_dependency(self, name: str) -> bool:
-        """Check if project has a dev dependency."""
-        dev_deps = self.pyproject_data.get("dependency-groups", {}).get("dev", [])
-        return any(name in dep for dep in dev_deps)
+        """Check if project has a dev dependency.
+
+        Reads PEP-735 `dependency-groups.dev` first, then falls back to the
+        older `project.optional-dependencies.dev` location used by pre-PEP-735
+        uv projects.
+        """
+        pep735 = self.pyproject_data.get("dependency-groups", {}).get("dev", [])
+        if any(name in dep for dep in pep735):
+            return True
+        legacy = (
+            self.pyproject_data.get("project", {})
+            .get("optional-dependencies", {})
+            .get("dev", [])
+        )
+        return any(name in dep for dep in legacy)
 
     def has_file(self, relative_path: str) -> bool:
         """Check if project has a file at relative path."""

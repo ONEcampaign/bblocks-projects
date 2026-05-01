@@ -433,7 +433,10 @@ def add(
         get_component,
         list_components,
     )
-    from bblocks.projects.installer import install_component  # noqa: PLC0415
+    from bblocks.projects.installer import (  # noqa: PLC0415
+        install_component,
+        rendered_template_for,
+    )
     from bblocks.projects.project import Project  # noqa: PLC0415
 
     # List components if requested
@@ -472,32 +475,37 @@ def add(
     console.print(f"  Type: {project.detect_type()}")
     console.print("  Uses uv: Yes")
 
-    # Install each component
+    # Install each component. Render the template once and share it across
+    # all installs in this invocation.
     success_count = 0
-    for component_name in components:
-        component = get_component(component_name)
+    with rendered_template_for(project) as rendered_dir:
+        for component_name in components:
+            component = get_component(component_name)
 
-        if component is None:
-            console.print(f"\n[bold red]Unknown component:[/bold red] {component_name}")
-            console.print(
-                "\nAvailable components: pre-commit, ruff, ci, pytest, pypi-publish"
-            )
-            console.print("Use --list to see descriptions")
-            continue
+            if component is None:
+                console.print(
+                    f"\n[bold red]Unknown component:[/bold red] {component_name}"
+                )
+                console.print(
+                    "\nAvailable components: pre-commit, ruff, ci, pytest, pypi-publish"
+                )
+                console.print("Use --list to see descriptions")
+                continue
 
-        try:
-            if install_component(
-                component,
-                project,
-                force=force,
-                interactive=not yes,
-            ):
-                success_count += 1
-        except Exception as e:
-            console.print(
-                f"\n[bold red]Error installing {component_name}:[/bold red] {e}"
-            )
-            continue
+            try:
+                if install_component(
+                    component,
+                    project,
+                    force=force,
+                    interactive=not yes,
+                    rendered_template_dir=rendered_dir,
+                ):
+                    success_count += 1
+            except Exception as e:
+                console.print(
+                    f"\n[bold red]Error installing {component_name}:[/bold red] {e}"
+                )
+                continue
 
     # Summary
     console.print(

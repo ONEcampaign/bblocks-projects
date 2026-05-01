@@ -9,7 +9,11 @@ import pytest
 from rich.console import Console as RichConsole
 
 from bblocks.projects.components import COMPONENTS_REGISTRY
-from bblocks.projects.installer import install_component
+from bblocks.projects.installer import (
+    _parse_dep_name,
+    install_component,
+    rendered_template_for,
+)
 from bblocks.projects.project import Project
 
 
@@ -85,3 +89,77 @@ def test_pypi_publish_falls_back_when_no_copier_answers(
     output = buf.getvalue()
     assert "<YOUR-GITHUB-USERNAME>/<your-repo>" in output
     assert "{github_username}" not in output
+
+
+def test_rendered_template_for_renders_once_for_multiple_installs(
+    fake_uv_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hoisting the render context manager around a batch of installs causes a
+    single render call even when multiple components are installed."""
+    buf = io.StringIO()
+    test_console = RichConsole(file=buf, force_terminal=False, width=200)
+    monkeypatch.setattr("bblocks.projects.installer.console", test_console)
+
+    project = Project(fake_uv_project)
+    components = [
+        COMPONENTS_REGISTRY["ruff"],
+        COMPONENTS_REGISTRY["pre-commit"],
+        COMPONENTS_REGISTRY["pytest"],
+    ]
+
+    with (
+        patch(
+            "bblocks.projects.installer._copier_run_copy",
+            side_effect=_make_no_render_stub(fake_uv_project),
+        ) as mock_render,
+        rendered_template_for(project) as rendered_dir,
+    ):
+        for comp in components:
+            install_component(
+                comp, project,
+                force=True, interactive=False,
+                rendered_template_dir=rendered_dir,
+            )
+
+    assert mock_render.call_count == 1
+
+
+@pytest.mark.parametrize(
+    ("spec", "expected"),
+    [
+        ("ruff", "ruff"),
+        ("ruff>=0.8.0", "ruff"),
+        ("ruff==0.8.0", "ruff"),
+        ("pkg~=1.0", "pkg"),
+        ("pkg!=1.5", "pkg"),
+        ("pkg<2", "pkg"),
+        ("pkg<=2", "pkg"),
+        ("pkg>1", "pkg"),
+        ("pkg[extra]", "pkg"),
+        ("pkg[extra]>=1.0", "pkg"),
+        ("pkg ; python_version>='3.10'", "pkg"),
+        ("  pkg>=1  ", "pkg"),
+    ],
+)
+def test_parse_dep_name(spec: str, expected: str) -> None:
+    assert _parse_dep_name(spec) == expected
+
+
+def test_install_component_renders_internally_when_no_dir_passed(
+    fake_uv_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When no rendered_template_dir is passed, install_component renders for itself."""
+    buf = io.StringIO()
+    test_console = RichConsole(file=buf, force_terminal=False, width=200)
+    monkeypatch.setattr("bblocks.projects.installer.console", test_console)
+
+    project = Project(fake_uv_project)
+    component = COMPONENTS_REGISTRY["ruff"]
+
+    with patch(
+        "bblocks.projects.installer._copier_run_copy",
+        side_effect=_make_no_render_stub(fake_uv_project),
+    ) as mock_render:
+        install_component(component, project, force=True, interactive=False)
+
+    assert mock_render.call_count == 1

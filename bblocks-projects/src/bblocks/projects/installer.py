@@ -1,7 +1,10 @@
 """Component installation logic."""
 
+import re
 import subprocess
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +21,22 @@ from bblocks.projects.project import Project
 
 console = Console()
 
+# PEP-440 specifiers (`==`, `!=`, `<=`, `>=`, `<`, `>`, `~=`, `===`),
+# extras (`[extra]`), markers (`;`), or whitespace all delimit the package name.
+_DEP_NAME_DELIM_RE = re.compile(r"[\[<>=!~ ;]")
+
 
 class ConfigMergeError(ValueError):
     """Raised when merge_config_sections encounters a type mismatch at a leaf key."""
+
+
+def _parse_dep_name(spec: str) -> str:
+    """Extract the bare package name from a PEP 508 dep spec.
+
+    Handles `pkg`, `pkg>=1`, `pkg==1.0`, `pkg~=1.0`, `pkg<2`, `pkg!=1.5`,
+    `pkg[extra]`, `pkg[extra]>=1`, and `pkg ; python_version>='3.10'`.
+    """
+    return _DEP_NAME_DELIM_RE.split(spec.strip(), maxsplit=1)[0]
 
 
 def merge_config_sections(
@@ -220,12 +236,28 @@ def _render_post_install_steps(
     return [step.replace("{github_username}", username) for step in steps]
 
 
+@contextmanager
+def rendered_template_for(project: Project) -> Iterator[Path]:
+    """Render the template for `project` into a tempdir and yield the path.
+
+    Hoist this once around a batch of `install_component` calls so the template
+    is rendered a single time per `add` invocation rather than once per component.
+    """
+    with tempfile.TemporaryDirectory(prefix="bblocks-add-") as tempdir_str:
+        tempdir = Path(tempdir_str)
+        _render_template_to_tempdir(
+            project, tempdir, template_url=resolve_template_url()
+        )
+        yield tempdir
+
+
 def install_component(
     component: ComponentDef,
     project: Project,
     *,
     force: bool = False,
     interactive: bool = True,
+    rendered_template_dir: Path | None = None,
 ) -> bool:
     """Install a component into a project.
 
@@ -234,6 +266,9 @@ def install_component(
         project: Target project
         force: Force overwrite existing files
         interactive: Ask for confirmation before changes
+        rendered_template_dir: Pre-rendered template tempdir from
+            `rendered_template_for(project)`. When None, the template is
+            rendered for this single call.
 
     Returns:
         True if installation succeeded
@@ -263,95 +298,107 @@ def install_component(
             console.print("[yellow]Use --force to overwrite existing files[/yellow]")
             return False
 
-    with tempfile.TemporaryDirectory(prefix="bblocks-add-") as tempdir_str:
-        tempdir = Path(tempdir_str)
-        _render_template_to_tempdir(
-            project, tempdir, template_url=resolve_template_url()
+    if rendered_template_dir is not None:
+        return _install_from_rendered(
+            component, project, rendered_template_dir,
+            force=force, interactive=interactive,
+        )
+    with rendered_template_for(project) as tempdir:
+        return _install_from_rendered(
+            component, project, tempdir,
+            force=force, interactive=interactive,
         )
 
-        config_updates: dict[str, Any] = {}
-        if component.pyproject_sections:
-            rendered_pyproject = tempdir / "pyproject.toml"
-            if rendered_pyproject.exists():
-                config_updates = _extract_pyproject_sections(
-                    rendered_pyproject, component.pyproject_sections
+
+def _install_from_rendered(
+    component: ComponentDef,
+    project: Project,
+    tempdir: Path,
+    *,
+    force: bool,
+    interactive: bool,
+) -> bool:
+    config_updates: dict[str, Any] = {}
+    if component.pyproject_sections:
+        rendered_pyproject = tempdir / "pyproject.toml"
+        if rendered_pyproject.exists():
+            config_updates = _extract_pyproject_sections(
+                rendered_pyproject, component.pyproject_sections
+            )
+        else:
+            console.print(
+                "[yellow]Warning: rendered pyproject.toml not found — "
+                "skipping config injection[/yellow]"
+            )
+
+    if config_updates:
+        existing_tool = project.pyproject_data.get("tool", {})
+        if "tool" in config_updates:
+            show_config_diff(component.name, existing_tool, config_updates["tool"])
+        if "build-system" in config_updates:
+            console.print(
+                f"[bold cyan]{component.name}[/bold cyan] will inject "
+                "[build-system] section"
+            )
+
+        if interactive and not Confirm.ask("\nApply these config changes?"):
+            console.print("[yellow]Installation cancelled[/yellow]")
+            return False
+
+    for relpath in component.template_files:
+        dest_relpath = relpath.removesuffix(".jinja")
+        src_path = tempdir / dest_relpath
+        dest_path = project.path / dest_relpath
+
+        if not src_path.exists():
+            console.print(
+                f"[yellow]Warning: rendered file not found in template:[/yellow] "
+                f"{dest_relpath}"
+            )
+            continue
+
+        if dest_path.exists() and not force:
+            console.print(
+                f"[yellow]Skipping existing file:[/yellow] {dest_relpath}"
+            )
+            continue
+
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
+        console.print(f"[green]✓[/green] Created: {dest_relpath}")
+
+    if config_updates:
+        with open(project.pyproject_path, encoding="utf-8") as f:
+            pyproject_data: Any = tomlkit.load(f)
+
+        for top_key, top_value in config_updates.items():
+            if top_key == "build-system" and project.has_config_section(
+                "build-system"
+            ):
+                continue
+            if top_key in pyproject_data and isinstance(top_value, dict):
+                pyproject_data[top_key] = merge_config_sections(
+                    pyproject_data[top_key], top_value
                 )
             else:
-                console.print(
-                    "[yellow]Warning: rendered pyproject.toml not found — "
-                    "skipping config injection[/yellow]"
-                )
+                pyproject_data[top_key] = top_value
 
-        if config_updates:
-            existing_tool = project.pyproject_data.get("tool", {})
-            if "tool" in config_updates:
-                show_config_diff(component.name, existing_tool, config_updates["tool"])
-            if "build-system" in config_updates:
-                console.print(
-                    f"[bold cyan]{component.name}[/bold cyan] will inject "
-                    "[build-system] section"
-                )
+        with open(project.pyproject_path, "w", encoding="utf-8") as f:
+            tomlkit.dump(pyproject_data, f)
+        console.print("[green]✓[/green] Updated: pyproject.toml")
 
-            if interactive and not Confirm.ask("\nApply these config changes?"):
-                console.print("[yellow]Installation cancelled[/yellow]")
-                return False
+        project.reload_pyproject()
 
-        for relpath in component.template_files:
-            dest_relpath = relpath.removesuffix(".jinja")
-            src_path = tempdir / dest_relpath
-            dest_path = project.path / dest_relpath
-
-            if not src_path.exists():
-                console.print(
-                    f"[yellow]Warning: rendered file not found in template:[/yellow] "
-                    f"{dest_relpath}"
-                )
-                continue
-
-            if dest_path.exists() and not force:
-                console.print(
-                    f"[yellow]Skipping existing file:[/yellow] {dest_relpath}"
-                )
-                continue
-
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
-            console.print(f"[green]✓[/green] Created: {dest_relpath}")
-
-        if config_updates:
-            with open(project.pyproject_path, encoding="utf-8") as f:
-                pyproject_data: Any = tomlkit.load(f)
-
-            for top_key, top_value in config_updates.items():
-                if top_key == "build-system" and project.has_config_section(
-                    "build-system"
-                ):
-                    continue
-                if top_key in pyproject_data and isinstance(top_value, dict):
-                    pyproject_data[top_key] = merge_config_sections(
-                        pyproject_data[top_key], top_value
-                    )
-                else:
-                    pyproject_data[top_key] = top_value
-
-            with open(project.pyproject_path, "w", encoding="utf-8") as f:
-                tomlkit.dump(pyproject_data, f)
-            console.print("[green]✓[/green] Updated: pyproject.toml")
-
-            project.reload_pyproject()
-
-    # Add dependencies
     dev_deps = component.dev_deps
     if dev_deps:
         console.print("\n[bold]Dev dependencies to add:[/bold]")
         for dep in dev_deps:
-            # Check if already present
-            if project.has_dev_dependency(dep.split(">=")[0].split("==")[0]):
+            if project.has_dev_dependency(_parse_dep_name(dep)):
                 console.print(f"  • {dep} [dim](already present)[/dim]")
             else:
                 console.print(f"  • {dep}")
 
-        if interactive and dev_deps:
+        if interactive:
             if Confirm.ask("\nAdd these dependencies now?"):
                 _add_dependencies(project, dev_deps, dev=True)
             else:
@@ -361,7 +408,6 @@ def install_component(
                 )
                 console.print(f"  uv add --dev {' '.join(dev_deps)}")
 
-    # Show post-install steps
     steps = component.post_install_steps
     if steps:
         console.print("\n[bold green]✓ Component installed successfully![/bold green]")
@@ -384,8 +430,7 @@ def _add_dependencies(
         dev: Whether these are dev dependencies
     """
     for dep in dependencies:
-        # Check if already present
-        dep_name = dep.split(">=")[0].split("==")[0]
+        dep_name = _parse_dep_name(dep)
         if dev:
             has_it = project.has_dev_dependency(dep_name)
         else:

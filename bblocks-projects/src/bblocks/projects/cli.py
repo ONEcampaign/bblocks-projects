@@ -4,11 +4,17 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from copier import run_copy, run_update
 from copier.errors import CopierError
 from rich.console import Console
+from rich.panel import Panel
+
+if TYPE_CHECKING:
+    from bblocks.projects.doctor import Finding
+    from bblocks.projects.project import Project
 
 from bblocks.projects import __version__
 from bblocks.projects.config import (
@@ -512,6 +518,108 @@ def add(
         f"\n[bold]Summary:[/bold] Installed {success_count}/{len(components)} "
         "components"
     )
+
+
+def _render_doctor_report(project: "Project", findings: "list[Finding]") -> None:
+    from bblocks.projects.doctor import SECTIONS  # noqa: PLC0415
+
+    console.print(
+        f"\n[bold cyan]Doctor report for[/bold cyan] {project.path}\n"
+    )
+    for code_prefix, section_name in SECTIONS:
+        section_findings = [f for f in findings if f.code.startswith(f"{code_prefix}.")]
+        if not section_findings:
+            body = f"[green]✓[/green] {section_name} healthy"
+        else:
+            lines = []
+            for finding in section_findings:
+                if finding.severity == "advisory":
+                    line = f"[yellow]![/yellow] {finding.message}"
+                else:
+                    line = f"[red]✗[/red] {finding.message}"
+                lines.append(line)
+                if finding.remediation:
+                    lines.append(f"[dim]   → {finding.remediation}[/dim]")
+            body = "\n".join(lines)
+        console.print(Panel(body, title=f"[bold]{section_name}[/bold]", expand=False))
+
+    has_catastrophic = any(f.severity == "catastrophic" for f in findings)
+    has_finding = any(f.severity == "finding" for f in findings)
+    non_catastrophic = [f for f in findings if f.severity != "catastrophic"]
+
+    if has_catastrophic:
+        console.print("[bold red]Catastrophic: cannot continue[/bold red]")
+    elif not findings:
+        console.print("[bold green]Healthy[/bold green]")
+    elif not has_finding:
+        console.print(
+            f"[yellow]{len(non_catastrophic)} advisories[/yellow] (informational)"
+        )
+    else:
+        console.print(
+            f"[yellow]{len(non_catastrophic)} findings[/yellow] (use --strict to fail)"
+        )
+
+
+@app.command()
+def doctor(
+    path: Path = typer.Option(
+        Path.cwd(),
+        "--path",
+        "-p",
+        help="Path to the project to diagnose (defaults to current directory)",
+    ),
+    strict: bool = typer.Option(
+        False,
+        "--strict",
+        help="Exit non-zero on any finding (default: only on catastrophic)",
+    ),
+    check_updates: bool = typer.Option(
+        False,
+        "--check-updates",
+        help="Compare local _commit against template HEAD (network)",
+    ),
+) -> None:
+    """Run health checks on a bblocks-managed project.
+
+    Examples:
+
+        # Diagnose current directory
+        bblocks-projects doctor
+
+        # Diagnose a specific project
+        bblocks-projects doctor --path /path/to/my-project
+
+        # Strict mode (exit non-zero on any finding)
+        bblocks-projects doctor --strict
+
+        # Include template freshness check (requires network)
+        bblocks-projects doctor --check-updates
+    """
+    from bblocks.projects.doctor import run_checks  # noqa: PLC0415
+    from bblocks.projects.project import Project  # noqa: PLC0415
+
+    abs_path = path.absolute()
+    if not (abs_path / "pyproject.toml").exists():
+        console.print(
+            "[bold red]Error:[/bold red] No pyproject.toml found. "
+            "This doesn't appear to be a Python project."
+        )
+        raise typer.Exit(code=1)
+    if not (abs_path / ".copier-answers.yml").exists():
+        console.print(
+            "[bold red]Error:[/bold red] This project doesn't appear to be "
+            "bblocks-managed (no .copier-answers.yml)."
+        )
+        raise typer.Exit(code=1)
+    project = Project(abs_path)
+    findings = run_checks(project, check_updates=check_updates)
+    _render_doctor_report(project, findings)
+    if any(f.severity == "catastrophic" for f in findings):
+        raise typer.Exit(code=1)
+    # --strict flips on severity "finding" only; "advisory" never affects exit code.
+    if strict and any(f.severity == "finding" for f in findings):
+        raise typer.Exit(code=1)
 
 
 @app.callback()

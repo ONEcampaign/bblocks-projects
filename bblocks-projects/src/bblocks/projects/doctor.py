@@ -192,8 +192,12 @@ def _component_installed(comp: ComponentDef, project: Project) -> bool:
 def _check_components(project: Project) -> list[Finding]:
     findings: list[Finding] = []
     project_type = project.detect_type()
+    include_pytest = bool(project.copier_answers.get("include_pytest", False))
     for comp in COMPONENTS_REGISTRY.values():
         if comp.requires_project_type and comp.requires_project_type != project_type:
+            continue
+        # Pytest is opt-in for project-type repos; skip when the user opted out.
+        if comp.name == "pytest" and project_type != "package" and not include_pytest:
             continue
         if not _component_installed(comp, project):
             findings.append(

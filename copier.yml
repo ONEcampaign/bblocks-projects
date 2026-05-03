@@ -40,6 +40,12 @@ include_notebooks:
   default: false
   when: "{{ project_type != 'package' }}"
 
+include_pytest:
+  type: bool
+  help: Include pytest with coverage (config, dev deps, tests/ directory, CI test job)?
+  default: false
+  when: "{{ project_type != 'package' }}"
+
 # Author info
 author_name:
   type: str
@@ -123,21 +129,29 @@ _message_after_copy: |
 
      $ uv run ruff check .
      $ uv run ty check src/{{ project_slug }}
+  {% if include_pytest %}
+  9. Run tests:
 
-  9. Optional: install pytest dev deps (config is already set up; merge will
-     report "Conflicts detected" — use --force to confirm a safe re-merge):
+     $ uv run pytest
+  {% else %}
+  9. Optional: add pytest later with:
 
-     $ bblocks-projects add pytest --force
+     $ bblocks-projects add pytest
+  {% endif %}
   {% else %}
   7. Run quality checks:
 
      $ uv run ruff check .
      $ uv run ty check src/{{ project_slug }}
+  {% if include_pytest %}
+  8. Run tests:
 
-  8. Optional: install pytest dev deps (config is already set up; merge will
-     report "Conflicts detected" — use --force to confirm a safe re-merge):
+     $ uv run pytest
+  {% else %}
+  8. Optional: add pytest later with:
 
-     $ bblocks-projects add pytest --force
+     $ bblocks-projects add pytest
+  {% endif %}
   {% endif %}
   {%- endif %}
 

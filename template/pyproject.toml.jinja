@@ -41,7 +41,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-{% if project_type == 'package' %}
+{% if project_type == 'package' or include_pytest %}
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
 {% endif %}
@@ -159,6 +159,7 @@ possibly-missing-attribute = "ignore"
 possibly-unresolved-reference = "ignore"
 {% endif %}
 
+{% if project_type == 'package' or include_pytest %}
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
@@ -184,3 +185,4 @@ exclude_lines = [
 ]
 show_missing = true
 precision = 2
+{% endif %}

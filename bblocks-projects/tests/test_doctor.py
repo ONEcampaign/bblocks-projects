@@ -162,6 +162,44 @@ def test_check_components_skips_wrong_project_type(tmp_path: Path) -> None:
     assert not any("pypi-publish" in msg for msg in missing_names)
 
 
+def test_check_components_skips_pytest_for_project_when_opted_out(
+    tmp_path: Path,
+) -> None:
+    """Project-type repo without include_pytest must not flag pytest as missing."""
+    p = _make_bblocks_project(
+        tmp_path,
+        project_type="project",
+        with_components=("pre-commit", "ruff", "ci"),
+    )
+    project = Project(p)
+    findings = run_checks(project, check_updates=False)
+    pytest_findings = [
+        f for f in findings if f.code == "components.missing" and "pytest" in f.message
+    ]
+    assert pytest_findings == []
+
+
+def test_check_components_reports_pytest_for_project_when_opted_in(
+    tmp_path: Path,
+) -> None:
+    """Project-type repo with include_pytest:true and missing pytest deps must flag it."""
+    p = _make_bblocks_project(
+        tmp_path,
+        project_type="project",
+        with_components=("pre-commit", "ruff", "ci"),
+    )
+    answers_path = p / ".copier-answers.yml"
+    answers_path.write_text(
+        answers_path.read_text() + "include_pytest: true\n", encoding="utf-8"
+    )
+    project = Project(p)
+    findings = run_checks(project, check_updates=False)
+    pytest_findings = [
+        f for f in findings if f.code == "components.missing" and "pytest" in f.message
+    ]
+    assert len(pytest_findings) == 1
+
+
 def test_check_components_reports_missing_with_remediation(tmp_path: Path) -> None:
     p = _make_bblocks_project(
         tmp_path,

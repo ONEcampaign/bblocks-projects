@@ -108,6 +108,36 @@ def test_ci_quotes_python_version_in_run_lines(
     assert "uv python install '3.11'" in release
 
 
+def test_project_default_omits_pytest_artifacts(
+    template_src: Path, tmp_path: Path
+) -> None:
+    """`project` type without `include_pytest` ships no pytest config, deps, tests/, or test job."""
+    rendered = _render(template_src, tmp_path / "no_pytest", "project")
+    pyproject = (rendered / "pyproject.toml").read_text()
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
+    assert "[tool.pytest.ini_options]" not in pyproject
+    assert "[tool.coverage.run]" not in pyproject
+    assert "pytest>=" not in pyproject
+    assert not (rendered / "tests").exists()
+    assert "test:" not in ci
+
+
+def test_project_with_include_pytest_scaffolds_full_testing(
+    template_src: Path, tmp_path: Path
+) -> None:
+    """`project` + `include_pytest=true` scaffolds the same pytest surface as a package."""
+    rendered = _render(
+        template_src, tmp_path / "with_pytest", "project", include_pytest="true"
+    )
+    pyproject = (rendered / "pyproject.toml").read_text()
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
+    assert "[tool.pytest.ini_options]" in pyproject
+    assert "[tool.coverage.run]" in pyproject
+    assert "pytest>=8.0.0" in pyproject
+    assert (rendered / "tests" / "__init__.py").exists()
+    assert "test:" in ci
+
+
 def test_python_314_renders_with_correct_classifiers_and_matrix(
     template_src: Path, tmp_path: Path
 ) -> None:

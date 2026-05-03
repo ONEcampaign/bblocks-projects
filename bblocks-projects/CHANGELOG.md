@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-05-03
+
+### Added
+
+- **`include_pytest` template variable for `project`-type repos.** Asks at
+  creation time whether to scaffold pytest (config sections, dev deps,
+  `tests/` directory, CI test job). Default `false` — opt-in. Packages
+  always include pytest, unchanged.
+
+### Changed
+
+- **`project`-type repos no longer ship dead pytest config sections.**
+  Previously, `[tool.pytest.ini_options]`, `[tool.coverage.run]`, and
+  `[tool.coverage.report]` were rendered for every project type, even
+  when pytest itself wasn't installed — which caused `bblocks-projects
+  add pytest` to flag spurious "Conflicts detected" against
+  byte-identical config. Now those sections render only when pytest is
+  actually present.
+- **`doctor` no longer flags pytest as missing for `project`-type repos
+  that opted out.** When `include_pytest: false` (or absent) in
+  `.copier-answers.yml`, the pytest component check is skipped.
+
 ## [1.0.1] - 2026-05-03
 
 ### Changed

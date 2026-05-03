@@ -38,7 +38,7 @@ jobs:
       - name: Run ty
         run: uv run ty check 'src/{{ project_slug }}'
 
-{% if project_type == 'package' %}
+{% if project_type == 'package' or include_pytest %}
   test:
     runs-on: ubuntu-latest
     strategy:

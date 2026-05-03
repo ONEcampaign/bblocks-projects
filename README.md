@@ -1,185 +1,91 @@
-# Python Project Templates
+# bblocks-projects
 
-This repository contains:
+> A Copier template for ONE Campaign Python projects, plus a CLI for working with it.
 
-1. **bblocks-projects** - A CLI tool for creating, updating, and enhancing Python projects
-2. **template/** - Copier templates for Python packages and general projects (analysis, pipelines, internal tools)
+This repo holds two things:
 
-## Repository Structure
+- **`bblocks-projects/`** — the [`bblocks-projects`](bblocks-projects/README.md) CLI (`create`, `update`, `add`, `doctor`).
+- **`template/`** — the [Copier](https://copier.readthedocs.io/) template the CLI renders.
+
+If you just want to use the CLI to scaffold or maintain a project, jump to the [package README](bblocks-projects/README.md). The rest of this file is for people working on the template or the CLI itself.
+
+## Repository layout
 
 ```
 bblocks-projects/
-├── bblocks-projects/       # CLI tool (installable via pip/uv)
-│   ├── src/                # Source code
-│   └── pyproject.toml      # Package configuration
-│
+├── bblocks-projects/       # CLI tool (published to PyPI)
+│   ├── src/bblocks/projects/
+│   ├── tests/
+│   └── pyproject.toml
 ├── template/               # Copier template files
-│   ├── copier.yml          # Template questions and configuration
-│   ├── {% if ... %}/       # Conditional directories for project types
-│   └── [template files]    # Files copied to generated projects
-│
-├── docs/                   # User-facing MkDocs site
-├── mkdocs.yml              # MkDocs configuration
-└── README.md               # This file
+│   ├── copier.yml          # questions and post-generation tasks
+│   ├── {% if ... %}/       # conditional directories per project type
+│   └── ...                 # files rendered into generated projects
+├── docs/                   # MkDocs site source (rendered at the repo root)
+├── mkdocs.yml
+└── README.md               # this file
 ```
 
-## bblocks-projects CLI Tool
+## Quick start
 
-A command-line tool that makes it easy to work with these templates.
-
-**Features:**
-- Create new Python projects (packages or general projects)
-- Update existing projects when templates improve
-- Add individual components (pre-commit, ruff, CI, etc.) to any project
-
-**Installation:**
 ```bash
-# Use without installing
+# Create a new project (no install needed)
 uvx bblocks-projects create my-project
 
-# Or install persistently
-uv tool install bblocks-projects
+# Update an existing one
+cd my-project && uvx bblocks-projects update
+
+# Add a single component to any Python project
+uvx bblocks-projects add pre-commit ruff ci
+
+# Health-check a managed project
+uvx bblocks-projects doctor
 ```
 
-**Documentation:**
+Full usage and flag reference: [docs/](docs/index.md).
 
-Full documentation is in [docs/](docs/):
+## Using Copier directly
 
-- [Getting Started](docs/getting-started.md) — installation and first project
-- [Creating Projects](docs/creating-projects.md) — `create` flags and patterns
-- [Updating Projects](docs/updating-projects.md) — keeping projects in sync
-- [Adding Components](docs/adding-components.md) — enhance existing projects
-- [Adopting an Existing Project](docs/adopting-an-existing-project.md) — bring an unmanaged project under management
-- [Running the Doctor](docs/running-the-doctor.md) — health checks
-- [Reference](docs/reference.md) — every flag, every variable, every component
-- [Package vs Project](docs/package-vs-project.md) — picking between the two project types
-
-To preview the site locally: `uv run --project bblocks-projects mkdocs serve`.
-
-
-## Template Directory
-
-The `template/` directory contains [Copier](https://copier.readthedocs.io/) template files that define what gets generated when you create a new project.
-
-### How It Works
-
-Copier is a library for rendering project templates. When you run `bblocks-projects create` or `copier copy`, it:
-
-1. Reads `template/copier.yml` for configuration and questions
-2. Asks you questions (project name, type, Python version, etc.)
-3. Renders template files with your answers using Jinja2
-4. Copies the rendered files to your new project directory
-
-### Template Types
-
-The template supports two project types:
-
-**Python Package** - For libraries to publish on PyPI:
-- src-layout structure
-- pytest with coverage
-- PyPI publishing workflow
-- Type hint support
-
-**Project** - For analysis, pipelines, and internal tools:
-- src-layout for reusable code (`src/{slug}/`)
-- `data/raw/` (gitignored) and `data/processed/` directories
-- Optional `notebooks/` for Jupyter exploration
-- Looser ruff rules suited to exploratory code
-
-### Template Features
-
-All projects include:
-- **uv** for fast dependency management
-- **Ruff** for linting and formatting
-- **ty** for type checking
-- **pre-commit** hooks
-- **GitHub Actions** CI/CD workflows
-
-### Conditional Content
-
-The template uses Jinja2 conditionals to include different files based on project type:
-
-```
-template/
-├── {% if project_type == 'package' %}src{% endif %}/         # package: src/{slug}/ + py.typed
-├── {% if project_type != 'package' %}src{% endif %}/         # project: src/{slug}/ for reusable code
-├── {% if project_type != 'package' %}data{% endif %}/        # project: data/raw + data/processed
-├── {% if project_type == 'package' %}tests{% endif %}/       # package only
-└── pyproject.toml.jinja                                       # branches on project_type
-```
-
-See the [Copier documentation](https://copier.readthedocs.io/) for more on template syntax.
-
-## Quick Start
-
-**Create a new project:**
-```bash
-uvx bblocks-projects create my-project
-```
-
-**Update an existing project:**
-```bash
-cd my-project
-uvx bblocks-projects update
-```
-
-**Add features to existing projects:**
-```bash
-cd existing-project
-uvx bblocks-projects add ruff ci pre-commit
-```
-
-## Using Copier Directly
-
-If you prefer to use Copier without the bblocks-projects CLI:
+The CLI is a wrapper around Copier. If you'd rather drive Copier yourself:
 
 ```bash
-# Install Copier
 uv tool install copier
 
-# Create project from this template
-copier copy gh:ONEcampaign/bblocks-projects my-project
-
-# Update existing project
-cd my-project
-copier update
+copier copy gh:ONEcampaign/bblocks-projects my-project   # create
+cd my-project && copier update                           # update
 ```
 
-The bblocks-projects CLI is a wrapper around Copier with a nicer interface and additional features like component installation.
+The CLI adds the GitHub-profile prefill, the `add` component flow, and `doctor` on top of plain Copier.
 
-## Development
-
-### Working on bblocks-projects
+## Working on this repo
 
 ```bash
+# CLI tests, lint, type-check
 cd bblocks-projects
 uv sync
 uv run pytest
 uv run ruff check .
+uvx ty check src/bblocks/projects
+
+# Docs site (run from the repo root)
+uv run --project bblocks-projects mkdocs serve
 ```
 
-### Modifying the Template
+When changing the template:
 
-1. Edit files in `template/`
-2. Test by creating a project:
-   ```bash
-   copier copy . /tmp/test-project
-   ```
-3. Verify the generated project works
+1. Edit files under `template/`.
+2. Render into a scratch directory: `copier copy . /tmp/test-project`.
+3. Verify the generated project's CI checks pass.
+4. Test both `package` and `project` types (and that the legacy `research` answer still resolves to `project`).
 
-### Template Testing Best Practices
-
-- Test both `package` and `project` types (and verify legacy `research` answers still work)
-- Verify generated projects pass their CI checks
-- Check that `uv sync` and `uv run pytest` work in generated packages
-- Ensure `.copier-answers.yml` is created (needed for updates)
+`.copier-answers.yml` must be present in the generated project for `update` to work — verify it's there before merging template changes.
 
 ## Requirements
 
 - Python 3.11+
-- [uv](https://docs.astral.sh/uv/)
-- [Copier](https://copier.readthedocs.io/) 9.0+ (if using directly)
+- [`uv`](https://docs.astral.sh/uv/) and `git` on `PATH`
+- [Copier](https://copier.readthedocs.io/) 9.0+ if invoking Copier directly
 
-## License
+---
 
-MIT License - see LICENSE file for details.
+[Issues](https://github.com/ONEcampaign/bblocks-projects/issues) · MIT — see [LICENSE](LICENSE).

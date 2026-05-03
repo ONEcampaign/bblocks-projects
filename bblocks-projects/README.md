@@ -1,274 +1,93 @@
-# bblocks.projects
+# bblocks-projects
 
-ONE Campaign Python project utilities - create, update, and enhance Python projects with standardized templates and tools.
+> A CLI for creating, updating, and auditing Python projects against a shared [Copier](https://copier.readthedocs.io/) template.
 
-## Installation
+[![PyPI](https://img.shields.io/pypi/v/bblocks-projects.svg)](https://pypi.org/project/bblocks-projects/)
+[![Python](https://img.shields.io/pypi/pyversions/bblocks-projects.svg)](https://pypi.org/project/bblocks-projects/)
+[![License](https://img.shields.io/pypi/l/bblocks-projects.svg)](https://github.com/ONEcampaign/bblocks-projects/blob/main/LICENSE)
 
-### Use with uvx (recommended for one-off usage)
+`bblocks-projects` is the ONE Campaign's tool for keeping its Python projects consistent. It scaffolds new repos, pulls template improvements into existing ones, and adds individual pieces (pre-commit, CI, ruff config) to projects that didn't start from the template.
 
-No installation required! Just use `uvx`:
+## Why this exists
+
+Every Python project starts with the same decisions and boilerplate: which linter, which type checker, how to wire CI, where tests live, how publishing works. `bblocks-projects` keeps the choices in one place ([the template repo](https://github.com/ONEcampaign/bblocks-projects)) and gives you four commands to apply them: `create`, `update`, `add`, and `doctor`.
+
+## Install
+
+Requires Python 3.11+, `git`, and [`uv`](https://docs.astral.sh/uv/) on `PATH`.
 
 ```bash
-uvx bblocks-projects my-awesome-project
-```
+# One-off, no install (recommended)
+uvx bblocks-projects create my-project
 
-### Install persistently with uv
-
-```bash
+# Install with uv
 uv tool install bblocks-projects
-bblocks-projects my-awesome-project
-```
 
-### Install with pip/pipx
-
-```bash
+# Or pipx / pip
 pipx install bblocks-projects
-# or
 pip install bblocks-projects
 ```
 
+If you're signed into the GitHub CLI (`gh auth login`), `create` prefills your name, email, and username from your GitHub profile.
+
 ## Usage
 
-### Create a New Project
+**Create a new project.** Interactive by default — answer a handful of questions about name, license, and project type:
 
-**Interactive (recommended):**
 ```bash
-bblocks-projects create
+bblocks-projects create my-analysis        # new subdirectory
+bblocks-projects create --here             # current directory
 ```
 
-Running without arguments prompts you to choose where to create the project:
-- Current directory (if you've already created and `cd`'d into a folder)
-- New subdirectory (specify the name)
+You'll be asked to pick `package` (publishable to PyPI; src layout, pytest, `py.typed`) or `project` (analysis, pipeline, internal tool — adds `data/raw/`, `data/processed/`, optional notebooks, and ruff/ty configs that tolerate pandas/numpy stub gaps). To skip the prompts:
 
-The tool will then ask questions to customize your project:
-- Project name and description
-- Project type (package or project)
-- Author information (auto-filled from GitHub CLI if logged in)
-- License choice
-- etc.
-
-**With options:**
 ```bash
-# Create in a specific directory
-bblocks-projects create my-project
-
-# Create in current directory
-bblocks-projects create --here
-bblocks-projects create .
-
-# Create a package project with defaults
 bblocks-projects create my-package --type package --defaults
-
-# Create using a specific template version
-bblocks-projects create my-project --ref v1.0.0
-
-# Override specific values
-bblocks-projects create my-project --data author_name="Jane Doe" --data author_email="jane@one.org"
-
-# Skip GitHub auto-detection
-bblocks-projects create my-project --no-github
 ```
 
-**GitHub CLI Integration:**
-
-If you're logged into GitHub CLI (`gh auth login`), your author name, email, and username are automatically prefilled from your GitHub profile.
-
-### Update an Existing Project
-
-Keep your project in sync with the latest template improvements:
+**Update an existing project** when the template changes upstream:
 
 ```bash
-# Update from within your project directory
-cd my-project
-bblocks-projects update
-
-# Or specify the path
-bblocks-projects update --path /path/to/my-project
-
-# Update to a specific template version
-bblocks-projects update --ref v1.2.0
+cd my-analysis
+uvx bblocks-projects update
+git diff       # review what changed
+uv sync
 ```
 
-### Add Components to Existing Projects
+Previously-answered questions are reused silently. Pass `--no-skip-answered` to re-prompt for any of them, or `--ref v1.2.0` to update to a specific template version instead of `main`.
 
-Add specific template features to your existing Python projects without full template adoption:
+**Add a single component** to any Python project — including ones that didn't start from the template:
 
 ```bash
-# List available components
-bblocks-projects add --list
-
-# Add pre-commit hooks
-bblocks-projects add pre-commit
-
-# Add multiple components at once
-bblocks-projects add ruff ci pytest
-
-# Add to a specific project
-bblocks-projects add pre-commit --path /path/to/project
-
-# Skip confirmation prompts
-bblocks-projects add ruff --yes
-
-# Force overwrite existing files
-bblocks-projects add ci --force
+uvx bblocks-projects add --list             # see what's available
+uvx bblocks-projects add pre-commit         # one component
+uvx bblocks-projects add ruff ci pytest     # several at once
 ```
 
-**Available Components:**
-- **pre-commit** - Pre-commit hooks with ruff and ty
-- **ruff** - Ruff linter and formatter with comprehensive rules
-- **ci** - GitHub Actions CI workflow
-- **pytest** - Pytest with coverage reporting (packages only)
-- **pypi-publish** - GitHub Actions workflow for PyPI publishing (packages only)
+Available components: `pre-commit`, `ruff`, `ci`, `pytest`, and `pypi-publish` (packages only). `add` merges into your existing `pyproject.toml` rather than overwriting it, and shows the diff before applying.
 
-**What it does:**
-- Copies template files to your project
-- Merges configurations intelligently into pyproject.toml
-- Adds required dependencies
-- Shows you exactly what will change before applying
+**Run the doctor** to check a project against the current standards:
 
-**Example workflow:**
 ```bash
-# You have an existing Python project
-cd my-existing-project
-
-# Add pre-commit hooks from ONE template
-bblocks-projects add pre-commit
-# ✓ Creates .pre-commit-config.yaml
-# ✓ Adds pre-commit to dev dependencies
-# Shows next steps: uv sync, pre-commit install
-
-# Add CI workflows
-bblocks-projects add ci
-# ✓ Creates .github/workflows/ci.yml
-# Shows next steps: commit and push to GitHub
-
-# Add ruff configuration
-bblocks-projects add ruff
-# ✓ Adds [tool.ruff] config to pyproject.toml
-# ✓ Adds ruff to dev dependencies
-# Shows next steps: uv sync, ruff check
+uvx bblocks-projects doctor                 # diagnose the current directory
+uvx bblocks-projects doctor --strict        # exit non-zero on findings (CI-friendly)
+uvx bblocks-projects doctor --check-updates # is the template newer upstream?
 ```
 
-## Available Commands
+## When not to use this
 
-### `create`
+- **You're not at ONE Data.** The template encodes our specific choices (uv, ruff, ty, GitHub Actions, src-layout). If your team has different ones, fork the template repo — don't fight ours.
+- **You don't want a Copier-managed project.** `create` and `update` rely on `.copier-answers.yml` to track which template version generated the project. If you'd rather not have that file, use `add` to take a one-shot copy of the components you want and walk away.
+- **Your project predates Copier and you want full template adoption.** `update` requires `.copier-answers.yml`. Either start from `add` for the pieces you need, or follow the [adoption guide](https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/adopting-an-existing-project.md).
 
-Create a new ONE Campaign Python project.
+## What you get
 
-**Arguments:**
-- `DESTINATION` - Directory where the project will be created (optional - prompts if not provided)
+Every generated project includes [uv](https://docs.astral.sh/uv/), [ruff](https://docs.astral.sh/ruff/), [ty](https://docs.astral.sh/ty/), pre-commit, and a GitHub Actions CI workflow. Packages also get pytest with coverage, a `py.typed` marker, and a PyPI trusted-publishing workflow. Projects also get a `data/` tree (`raw/` gitignored, `processed/` tracked) and an optional `notebooks/` directory.
 
-**Options:**
-- `--here, -H` - Create project in current directory instead of a subdirectory
-- `--ref, -r` - Template version (branch, tag, or commit). Defaults to 'main'
-- `--type, -t` - Project type: 'package' or 'project'
-- `--data, -d` - Override template variables in KEY=VALUE format (can be used multiple times)
-- `--defaults` - Use default answers for all questions
-- `--no-github` - Don't prefill author info from GitHub CLI
+## Next
 
-**Examples:**
-```bash
-bblocks-projects create                    # Interactive - asks where to create
-bblocks-projects create my-project         # Create in new subdirectory
-bblocks-projects create --here             # Create in current directory
-bblocks-projects create .                  # Same as --here
-bblocks-projects create my-package --type package
-bblocks-projects create my-project --ref v1.0.0
-bblocks-projects create my-project --data author_name="John Doe"
-bblocks-projects create my-project --no-github
-```
+- [Getting Started](https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/getting-started.md) — a 15-minute walkthrough from zero to a generated project you've made a real change to.
 
-### `update`
+---
 
-Update an existing project to the latest template version.
-
-**Options:**
-- `--path, -p` - Path to the project to update (defaults to current directory)
-- `--ref, -r` - Update to specific template version
-- `--data, -d` - Override template variables in KEY=VALUE format
-- `--skip-answered/--no-skip-answered` - Skip or re-answer previously answered questions
-
-**Examples:**
-```bash
-bblocks-projects update
-bblocks-projects update --ref v1.2.0
-bblocks-projects update --path ../my-other-project
-bblocks-projects update --no-skip-answered  # Re-answer all questions
-```
-
-### `add`
-
-Add specific template components to an existing project.
-
-**Arguments:**
-- `COMPONENTS` - One or more component names to add
-
-**Options:**
-- `--path, -p` - Path to the project (defaults to current directory)
-- `--force, -f` - Force overwrite existing files
-- `--yes, -y` - Skip confirmation prompts
-- `--list, -l` - List available components and exit
-
-**Available Components:**
-- `pre-commit` - Pre-commit hooks configuration
-- `ruff` - Ruff linter/formatter configuration
-- `ci` - GitHub Actions CI workflow
-- `pytest` - Pytest testing configuration (packages only)
-- `pypi-publish` - PyPI publishing workflow (packages only)
-
-**Examples:**
-```bash
-bblocks-projects add --list
-bblocks-projects add pre-commit
-bblocks-projects add ruff ci pytest
-bblocks-projects add pre-commit --path /path/to/project
-bblocks-projects add ruff --yes  # Skip confirmations
-```
-
-**Features:**
-- Interactive by default - shows what will change before applying
-- Intelligent config merging for pyproject.toml
-- Conflict detection - warns if files/configs already exist
-- Automatic dependency management
-- Post-install guidance for each component
-
-## What You Get
-
-The template creates a modern Python project with:
-
-### For All Projects
--  **uv** for fast dependency management
--  **Ruff** for linting and formatting
--  **ty** for type checking (Astral's fast static type checker)
--  **pre-commit** hooks configured and auto-installed
--  **GitHub Actions** CI/CD
-
-### For Package Projects
--  **src-layout** structure
--  **pytest** with coverage
--  **PyPI publishing** workflow with trusted publishing
--  Type hint support (py.typed)
-
-### For General Projects (analysis, pipelines, internal tools)
--  **src-layout** for reusable code (`src/{slug}/`)
--  **data/raw/** (gitignored) and **data/processed/** directories
--  Optional Jupyter **notebooks/** directory
--  Looser ruff rules and ty config tolerant of pandas/numpy stub gaps
-
-
-## Documentation
-
-For detailed documentation about the templates and best practices:
-
-- [Getting Started Guide](../docs/usage/getting-started.md)
-- [Updating Projects](../docs/usage/updating.md)
-- [Template Repository](https://github.com/ONEcampaign/bblocks-projects)
-
-## Support
-
-- [Report Issues](https://github.com/ONEcampaign/bblocks-projects/issues)
-- [Discussions](https://github.com/ONEcampaign/bblocks-projects/discussions)
-
-## License
-
-MIT License - see [LICENSE](../LICENSE) file for details.
+[Source](https://github.com/ONEcampaign/bblocks-projects) · [Issues](https://github.com/ONEcampaign/bblocks-projects/issues) · MIT — see [LICENSE](https://github.com/ONEcampaign/bblocks-projects/blob/main/LICENSE).

@@ -1,8 +1,0 @@
-site_name: tools/bblocks-projects
-
-nav:
-  - Home: index.md
-  - Getting Started: getting-started.md
-  - Creating Projects: creating-projects.md
-  - Updating Projects: updating-projects.md
-  - Adding Components: adding-components.md

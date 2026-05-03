@@ -163,7 +163,4 @@ _tasks:
   - "uv sync"  # Creates/updates uv.lock for reproducible builds
   - "git add ."  # Includes uv.lock for version control
   - 'git commit -m "Initial commit from copier template"'
-  - command: "pre-commit install"
-    when: "{{ _copier_conf.os in ['linux', 'macos'] }}"
-  - command: "pre-commit install"
-    when: "{{ _copier_conf.os == 'windows' }}"
+  - "uv run pre-commit install"  # uv run resolves pre-commit from .venv, no host install needed

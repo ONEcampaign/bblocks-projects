@@ -456,5 +456,5 @@ def _add_dependencies(
                 capture_output=True,
             )
             console.print(f"[green]✓[/green] Added: {dep}")
-        except subprocess.CalledProcessError as e:
+        except (subprocess.CalledProcessError, OSError) as e:
             console.print(f"[red]✗[/red] Failed to add {dep}: {e}")

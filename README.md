@@ -11,7 +11,6 @@ This repository contains:
 bblocks-projects/
 ├── bblocks-projects/       # CLI tool (installable via pip/uv)
 │   ├── src/                # Source code
-│   ├── docs/               # User documentation (MkDocs)
 │   └── pyproject.toml      # Package configuration
 │
 ├── template/               # Copier template files
@@ -19,6 +18,8 @@ bblocks-projects/
 │   ├── {% if ... %}/       # Conditional directories for project types
 │   └── [template files]    # Files copied to generated projects
 │
+├── docs/                   # User-facing MkDocs site
+├── mkdocs.yml              # MkDocs configuration
 └── README.md               # This file
 ```
 
@@ -42,12 +43,18 @@ uv tool install bblocks-projects
 
 **Documentation:**
 
-Full documentation is available at [bblocks-projects/docs/](bblocks-projects/docs/):
+Full documentation is in [docs/](docs/):
 
-- [Getting Started](bblocks-projects/docs/docs/getting-started.md) - Installation and first project
-- [Creating Projects](bblocks-projects/docs/docs/creating-projects.md) - Package vs project layouts
-- [Updating Projects](bblocks-projects/docs/docs/updating-projects.md) - Keeping projects in sync
-- [Adding Components](bblocks-projects/docs/docs/adding-components.md) - Enhance existing projects
+- [Getting Started](docs/getting-started.md) — installation and first project
+- [Creating Projects](docs/creating-projects.md) — `create` flags and patterns
+- [Updating Projects](docs/updating-projects.md) — keeping projects in sync
+- [Adding Components](docs/adding-components.md) — enhance existing projects
+- [Adopting an Existing Project](docs/adopting-an-existing-project.md) — bring an unmanaged project under management
+- [Running the Doctor](docs/running-the-doctor.md) — health checks
+- [Reference](docs/reference.md) — every flag, every variable, every component
+- [Package vs Project](docs/package-vs-project.md) — picking between the two project types
+
+To preview the site locally: `uv run --project bblocks-projects mkdocs serve`.
 
 
 ## Template Directory

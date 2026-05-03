@@ -1,0 +1,14 @@
+site_name: tools/bblocks-projects
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - How to:
+      - Create a project: creating-projects.md
+      - Update a project: updating-projects.md
+      - Add components: adding-components.md
+      - Adopt an existing project: adopting-an-existing-project.md
+      - Run the doctor: running-the-doctor.md
+  - Reference: reference.md
+  - Explanation:
+      - Package vs project: package-vs-project.md

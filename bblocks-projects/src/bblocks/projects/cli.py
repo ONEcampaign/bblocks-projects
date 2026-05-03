@@ -40,7 +40,7 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _preflight_required_tools() -> None:
+def _preflight_required_tools(command: str) -> None:
     """Verify git and uv are on PATH; exit 1 with a helpful message otherwise."""
     missing: list[str] = []
     for tool in ("git", "uv"):
@@ -61,8 +61,8 @@ def _preflight_required_tools() -> None:
             f"{', '.join(missing)}"
         )
         console.print(
-            "Install the missing tool(s) and re-run "
-            "[bold]bblocks-projects create[/bold]."
+            f"Install the missing tool(s) and re-run "
+            f"[bold]bblocks-projects {command}[/bold]."
         )
         raise typer.Exit(code=1)
 
@@ -275,7 +275,7 @@ def create(
             key, value = item.split("=", 1)
             data_dict[key] = value
 
-    _preflight_required_tools()
+    _preflight_required_tools("create")
     try:
         run_copy(
             src_path=resolved_url,
@@ -361,6 +361,7 @@ def update(
         f"[bold cyan]Updating project at:[/bold cyan] {destination.absolute()}"
     )
 
+    _preflight_required_tools("update")
     resolved_url = resolve_template_url(cli_override=template)
     _announce_template_source(template, resolved_url)
 
@@ -374,7 +375,7 @@ def update(
         if resolved_url == TEMPLATE_URL:
             console.print(
                 "\nIf this is an existing project, see the adoption guide:\n"
-                "https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/usage/adopting-existing.md"
+                "https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/adopting-an-existing-project.md"
             )
         raise typer.Exit(code=1)
 
@@ -501,6 +502,8 @@ def add(
         console.print("[bold red]Error:[/bold red] No components specified")
         console.print("\nUse --list to see available components")
         raise typer.Exit(code=1)
+
+    _preflight_required_tools("add")
 
     # Validate project
     project = Project(path)
@@ -664,7 +667,7 @@ def doctor(
 
 @app.callback()
 def main(
-    version: bool | None = typer.Option(
+    _version: bool | None = typer.Option(
         None,
         "--version",
         "-v",

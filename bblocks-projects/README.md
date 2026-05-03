@@ -42,7 +42,7 @@ Running without arguments prompts you to choose where to create the project:
 
 The tool will then ask questions to customize your project:
 - Project name and description
-- Project type (package or research)
+- Project type (package or project)
 - Author information (auto-filled from GitHub CLI if logged in)
 - License choice
 - etc.
@@ -161,7 +161,7 @@ Create a new ONE Campaign Python project.
 **Options:**
 - `--here, -H` - Create project in current directory instead of a subdirectory
 - `--ref, -r` - Template version (branch, tag, or commit). Defaults to 'main'
-- `--type, -t` - Project type: 'package' or 'research'
+- `--type, -t` - Project type: 'package' or 'project'
 - `--data, -d` - Override template variables in KEY=VALUE format (can be used multiple times)
 - `--defaults` - Use default answers for all questions
 - `--no-github` - Don't prefill author info from GitHub CLI
@@ -249,11 +249,11 @@ The template creates a modern Python project with:
 -  **PyPI publishing** workflow with trusted publishing
 -  Type hint support (py.typed)
 
-### For Research Projects
--  Organized **scripts/** structure
--  **Paths** class for consistent directory references
--  Configured **logger** for analysis scripts
--  Separate **raw_data/** and **output/** directories
+### For General Projects (analysis, pipelines, internal tools)
+-  **src-layout** for reusable code (`src/{slug}/`)
+-  **data/raw/** (gitignored) and **data/processed/** directories
+-  Optional Jupyter **notebooks/** directory
+-  Looser ruff rules and ty config tolerant of pandas/numpy stub gaps
 
 
 ## Documentation

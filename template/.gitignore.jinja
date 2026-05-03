@@ -49,7 +49,7 @@ AGENTS.md
 .ruff_cache/
 
 # Project-specific
-{% if project_type == 'research' %}
+{% if project_type != 'package' %}
 # Raw data — never commit source data
 data/raw/*
 !data/raw/.gitkeep

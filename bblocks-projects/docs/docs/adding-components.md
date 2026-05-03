@@ -249,7 +249,7 @@ Edit `.github/workflows/ci.yml` to:
 
 Testing framework with coverage.
 
-**Package projects only** - Research projects typically don't need structured testing.
+**Available for any project type** — useful in non-package projects too when you have reusable code under `src/{slug}/` worth testing.
 
 **What it does:**
 - Adds pytest configuration to pyproject.toml
@@ -390,9 +390,9 @@ uv run pytest
 uv run ruff check .
 ```
 
-### Adding CI to Research Project
+### Adding CI to a Non-Package Project
 
-You have scripts but want CI:
+You have a non-package project but want CI:
 
 ```bash
 cd climate-analysis
@@ -400,13 +400,13 @@ cd climate-analysis
 # Add ruff for code quality
 bblocks-projects add ruff
 
-# Add CI (automatically detects research type)
+# Add CI (automatically detects project type)
 bblocks-projects add ci
 
 # CI will:
-# - Lint scripts/ directory
-# - Run ty on scripts/
-# - Skip tests (research projects don't have them)
+# - Lint the project root
+# - Run ty on src/{slug}
+# - Skip tests (non-package projects don't have a tests/ dir)
 
 git add .github/workflows/ci.yml
 git commit -m "Add CI"
@@ -592,10 +592,10 @@ bblocks-projects add pre-commit
 Some components only work with package projects:
 
 ```bash
-# Fails for research projects
-bblocks-projects add pytest
+# Fails for non-package projects when the component is package-only
+bblocks-projects add pypi-publish
 
-# Error: pytest component is only for package projects
+# Error: pypi-publish component is only for package projects
 ```
 
 **Solution:** Use appropriate components for your project type.

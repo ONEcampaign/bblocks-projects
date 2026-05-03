@@ -113,66 +113,66 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-### Research Projects
+### Project (analysis, pipelines, internal tools)
 
-For data analysis and scientific computing:
+For anything that isn't a published package — analysis work, ETL/data
+pipelines, internal tools, or one-off scripts:
 
 ```bash
-bblocks-projects create climate-analysis --type research
+bblocks-projects create climate-analysis --type project
 ```
 
 **You get:**
-- Organized scripts/ directory
-- Paths class for consistent file references
-- Configured logger for analysis scripts
-- Separate raw_data/ and output/ directories
-- Example analysis script
+- src-layout for reusable code (`src/{slug}/`)
+- `data/raw/` (gitignored — never commit source data)
+- `data/processed/` for derived outputs (tracked in git)
+- Optional `notebooks/` for Jupyter exploration
+- Looser ruff rules suited to exploratory code
+- ty configured to ignore pandas/numpy stub gaps
 
 **Use when:**
-- Analyzing data
-- One-off research projects
-- Exploratory analysis
-- Scientific computing
+- Analyzing data or running ad-hoc research
+- Building data pipelines or ETL
+- Writing internal tools or scripts
 - You won't publish to PyPI
 
 **Example structure:**
 
 ```
 climate-analysis/
-├── scripts/
-│   ├── config.py           # Paths configuration
-│   ├── logger.py           # Logging setup
-│   ├── 01_load_data.py
-│   ├── 02_clean_data.py
-│   └── 03_analyze.py
-├── raw_data/
-│   └── climate_data.csv
-├── output/
-│   ├── cleaned_data.csv
-│   └── results.png
+├── src/
+│   └── climate_analysis/
+│       └── __init__.py     # Reusable analysis code
+├── data/
+│   ├── raw/                # Input files (gitignored)
+│   │   └── climate_data.csv
+│   └── processed/          # Derived outputs (tracked)
+│       └── cleaned_data.csv
+├── notebooks/              # Optional, if include_notebooks=true
 └── pyproject.toml
 ```
 
 **Common workflow:**
 
 ```bash
-# Create research project
-bblocks-projects create climate-analysis --type research
+# Create the project
+bblocks-projects create climate-analysis --type project
 
 cd climate-analysis
 
-# Add your data
-cp ~/Downloads/climate_data.csv raw_data/
+# Add your data (gitignored — safe from accidental commits)
+cp ~/Downloads/climate_data.csv data/raw/
 
-# Write analysis script
-scripts/analyze_climate.py 
-
-# Add pandas
+# Add deps
 uv add pandas
 
-# Run analysis
-uv run python scripts/analyze_climate.py
+# Write reusable code under src/climate_analysis/, then run it
+uv run python -c "from climate_analysis import ..."
 ```
+
+> **Note (legacy `research` type):** `--type research` still works for
+> backwards compatibility with projects created before the rename. It
+> renders the same layout as `--type project`.
 
 ## Customization Options
 
@@ -229,7 +229,7 @@ You can override any template variable:
 - `project_name` - Display name
 - `project_slug` - Python package name
 - `project_description` - Brief description
-- `project_type` - `package` or `research`
+- `project_type` - `package` or `project` (legacy `research` accepted for back-compat)
 - `author_name` - Your name
 - `author_email` - Your email
 - `python_version` - `3.11`, `3.12`, or `3.13`
@@ -309,7 +309,7 @@ Static type checking with [ty](https://docs.astral.sh/ty/), Astral's fast type c
 
 ```bash
 # Check types
-uvx ty check src/  # or scripts/ for research
+uvx ty check src/{slug}
 ```
 
 ty is 10–100× faster than mypy and shares the same ecosystem as uv and ruff. Note: ty is currently pre-1.0; the API may evolve.
@@ -348,7 +348,7 @@ Automatic testing and deployment:
 ### Quick Prototype
 
 ```bash
-bblocks-projects create prototype --defaults --type research
+bblocks-projects create prototype --defaults --type project
 cd prototype
 uv add pandas matplotlib
 # Start coding!
@@ -436,7 +436,7 @@ Add your code and commit:
 
 ```bash
 # Add code
-src/my_project/core.py  # or scripts/analysis.py
+src/my_project/core.py
 
 # Quality checks run automatically
 git add .

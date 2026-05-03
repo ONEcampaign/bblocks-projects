@@ -10,7 +10,13 @@ from rich.console import Console
 
 console = Console()
 
-ProjectType = Literal["package", "research", "unknown"]
+ProjectType = Literal["package", "project", "unknown"]
+
+# Legacy values that resolve to a current ProjectType. The template was
+# renamed from `research` to `project` (the broader name better fits
+# analysis, pipelines, and internal tooling) but old projects still have
+# `project_type: research` in their .copier-answers.yml. Normalize on read.
+_PROJECT_TYPE_ALIASES: dict[str, ProjectType] = {"research": "project"}
 
 
 class Project:
@@ -82,29 +88,30 @@ class Project:
         return self._copier_answers
 
     def detect_type(self) -> ProjectType:
-        """Detect project type (package or research).
+        """Detect project type (package or project).
 
         Consults .copier-answers.yml first (authoritative for bblocks-managed
         projects). Falls back to filesystem heuristics if the file is missing
-        or malformed.
+        or malformed. Legacy `research` answers normalize to `project`.
         """
         pt = self.copier_answers.get("project_type")
-        if pt in ("package", "research"):
-            return pt
+        if isinstance(pt, str):
+            pt = _PROJECT_TYPE_ALIASES.get(pt, pt)
+            if pt in ("package", "project"):
+                return pt
 
         if not self.has_pyproject():
             return "unknown"
 
-        # Check for package indicators
-        if self.has_src_layout() or self.has_tests():
+        # Strongest layout markers: tests/ ⇒ package; data/ ⇒ project.
+        if self.has_tests():
             return "package"
+        if (self.path / "data").is_dir():
+            return "project"
 
-        # Check for research indicators
-        if (self.path / "scripts").is_dir():
-            return "research"
-
-        # Check build system in pyproject.toml
-        if "build-system" in self.pyproject_data:
+        # Fallback: src/ or [build-system] without disambiguating dirs leans
+        # package (the historical default).
+        if self.has_src_layout() or "build-system" in self.pyproject_data:
             return "package"
 
         return "unknown"

@@ -25,15 +25,20 @@ project_type:
   type: str
   help: What type of project?
   choices:
-    Package: package
-    Research/Analysis: research
-  default: package
+    Package (library published to PyPI): package
+    Project (analysis, pipelines, internal tools): project
+    # `research` is a legacy alias for `project`. Kept here so existing
+    # projects with `project_type: research` in .copier-answers.yml still
+    # validate during `copier update`. Template conditionals are inverted
+    # to `!= 'package'`, so both values render the same layout.
+    "Research (legacy alias for Project — kept for backwards compatibility)": research
+  default: project
 
 include_notebooks:
   type: bool
   help: Include a notebooks/ directory for Jupyter exploration?
   default: false
-  when: "{{ project_type == 'research' }}"
+  when: "{{ project_type != 'package' }}"
 
 # Author info
 author_name:

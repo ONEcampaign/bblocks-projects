@@ -71,7 +71,7 @@ def make_bblocks_project(
     )
 
     (tmp_path / "src" / slug).mkdir(parents=True, exist_ok=True)
-    if project_type == "research":
+    if project_type in ("project", "research"):
         (tmp_path / "data" / "raw").mkdir(parents=True, exist_ok=True)
         (tmp_path / "data" / "processed").mkdir(parents=True, exist_ok=True)
 

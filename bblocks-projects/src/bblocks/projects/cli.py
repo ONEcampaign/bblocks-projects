@@ -149,7 +149,7 @@ def create(
         None,
         "--type",
         "-t",
-        help="Project type: 'package' or 'research'",
+        help="Project type: 'package' or 'project'",
     ),
     data: list[str] | None = typer.Option(
         None,

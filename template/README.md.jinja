@@ -40,34 +40,24 @@ uv build
 ```
 
 {% else %}
-## Usage
+## Project Structure
 
-Scripts are located in the `scripts/` directory.
-
-```bash
-# Run an analysis script
-uv run python scripts/example_analysis.py
-```
-
-### Project Structure
-
-- `scripts/`: Analysis scripts
-  - `config.py`: Project paths configuration
-  - `logger.py`: Logging setup
-- `raw_data/`: Input data files
-- `output/`: Analysis results and outputs
+- `src/{{ project_slug }}/`: Reusable analysis code (importable package)
+- `data/raw/`: Input data files (gitignored — never commit source data)
+- `data/processed/`: Derived/processed data (tracked in git){% if include_notebooks %}
+- `notebooks/`: Jupyter notebooks for exploration{% endif %}
 
 ### Code Quality
 
 ```bash
 # Run linter
-uv run ruff check scripts/
+uv run ruff check .
 
 # Run formatter
-uv run ruff format scripts/
+uv run ruff format .
 
 # Run type checker
-uvx ty check scripts/
+uvx ty check src/{{ project_slug }}
 ```
 {% endif %}
 

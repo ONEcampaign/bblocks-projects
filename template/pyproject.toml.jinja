@@ -90,11 +90,11 @@ ignore = [
     "ANN401",   # Allow `Any` in typed signatures
 ]
 {% else %}
-# Research projects use a looser rule set for exploratory analysis.
-# Dropped: N (pep8-naming bans X/y/df), SIM (rewrites hurt numerical clarity),
-# PL (complexity rules fire on legitimate analysis scripts), ERA (commented-out
-# code is normal during exploration), PERF (clarity > micro-opt in research),
-# ANN (annotations not enforced for one-off scripts).
+# Non-package projects (analysis, pipelines, internal tools) use a looser
+# rule set. Dropped: N (pep8-naming bans X/y/df), SIM (rewrites hurt numerical
+# clarity), PL (complexity rules fire on legitimate analysis scripts), ERA
+# (commented-out code is normal during exploration), PERF (clarity > micro-opt
+# here), ANN (annotations not enforced for one-off scripts).
 select = [
     "E", "W", "F",      # pycodestyle, pyflakes
     "I",                 # isort
@@ -121,7 +121,7 @@ unfixable = []
 # Notebooks: don't require annotations; allow REPL-style patterns.
 "**/*.ipynb" = ["ANN", "F401", "F811", "E402"]
 {% else %}
-# Notebooks: research/exploration style — allow REPL-like patterns.
+# Notebooks: exploration style — allow REPL-like patterns.
 "**/*.ipynb" = ["F401", "F811", "E402"]
 {% endif %}
 
@@ -140,7 +140,7 @@ python-version = "{{ python_version }}"
 [tool.ty.src]
 include = ["src/{{ project_slug }}"]
 
-{% if project_type == 'research' %}
+{% if project_type != 'package' %}
 [tool.ty.analysis]
 # Replace pandas / numpy type information with `Any`. Eliminates the cascade
 # of false positives from those libraries' incomplete or absent stubs without
@@ -155,7 +155,7 @@ replace-imports-with-any = [
 
 [tool.ty.rules]
 # These warn-by-default rules fire frequently on dynamic dataframe / dict
-# patterns common in exploratory code. Demoted to ignore for research.
+# patterns common in exploratory code. Demoted to ignore.
 possibly-missing-attribute = "ignore"
 possibly-unresolved-reference = "ignore"
 {% endif %}

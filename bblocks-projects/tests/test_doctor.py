@@ -52,7 +52,18 @@ def test_run_checks_short_circuits_on_catastrophic_answers(tmp_path: Path) -> No
     assert "scaffolding.answers_unparseable" in codes
 
 
-def test_check_drift_project_type_research_missing_data(tmp_path: Path) -> None:
+def test_check_drift_project_type_project_missing_data(tmp_path: Path) -> None:
+    p = _make_bblocks_project(tmp_path, project_type="project")
+    shutil.rmtree(p / "data")
+    project = Project(p)
+    findings = run_checks(project, check_updates=False)
+    drift_findings = [f for f in findings if f.code == "drift.project_type_mismatch"]
+    assert len(drift_findings) == 1
+    assert "data" in drift_findings[0].message
+
+
+def test_check_drift_project_type_legacy_research_missing_data(tmp_path: Path) -> None:
+    """Legacy `research` answer is still recognized (BC) and expects the same dirs."""
     p = _make_bblocks_project(tmp_path, project_type="research")
     shutil.rmtree(p / "data")
     project = Project(p)
@@ -142,7 +153,7 @@ def test_component_installed_dev_dep_only_is_insufficient(tmp_path: Path) -> Non
 def test_check_components_skips_wrong_project_type(tmp_path: Path) -> None:
     p = _make_bblocks_project(
         tmp_path,
-        project_type="research",
+        project_type="project",
         with_components=("pre-commit", "ruff", "ci", "pytest"),
     )
     project = Project(p)

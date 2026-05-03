@@ -16,7 +16,7 @@ bblocks-projects gives you three simple commands to create, update, and enhance 
 
 ```bash
 # Create a new project with everything configured
-uvx bblocks-projects my-research-project
+uvx bblocks-projects my-first-project
 
 # Update an existing project to the latest template
 bblocks-projects update
@@ -40,8 +40,8 @@ uvx bblocks-projects my-data-analysis
 You get a complete project structure with uv, Ruff, ty, pre-commit hooks, and GitHub Actions CI/CD - all configured and ready to use.
 
 Choose between:
-- **Package projects** - For packages you'll publish to PyPI
-- **Research projects** - For research and data analysis projects
+- **Package projects** - For libraries you'll publish to PyPI
+- **General projects** - For analysis, pipelines, internal tools, or anything else
 
 ### Keep Projects Current
 
@@ -93,12 +93,12 @@ Every project includes:
 - PyPI publishing with trusted publishing
 - Type hint support (py.typed)
 
-**For research projects:**
+**For general projects (analysis, pipelines, internal tools):**
 
-- Organized scripts/ structure
-- Paths class for consistent directory references
-- Configured logger
-- Separate raw_data/ and output/ directories
+- src-layout for reusable code (`src/{slug}/`)
+- `data/raw/` (gitignored) and `data/processed/` directories
+- Optional Jupyter `notebooks/`
+- Looser ruff rules and ty config tolerant of pandas/numpy stub gaps
 
 ## Quick Start
 

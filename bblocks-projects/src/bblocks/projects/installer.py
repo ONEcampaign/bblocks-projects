@@ -165,7 +165,7 @@ def _render_template_to_tempdir(
     """Render the template into the caller-provided tempdir."""
     project_type = project.detect_type()
     if project_type == "unknown":
-        project_type = "package"  # copier.yml only accepts package|research
+        project_type = "package"  # copier.yml only accepts package|project
     _copier_run_copy(
         src_path=template_url,
         dst_path=str(tempdir),

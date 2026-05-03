@@ -123,10 +123,12 @@ def _check_copier_answers_parseable(project: Project) -> list[Finding]:
 
 def _check_drift_project_type(project: Project) -> list[Finding]:
     answer = project.copier_answers.get("project_type")
-    if answer not in ("package", "research"):
+    if answer not in ("package", "project", "research"):
         return []
     slug = project.copier_answers.get("project_slug") or project.get_project_slug()
-    if answer == "research":
+    # `research` is a legacy alias for `project` (template was renamed); both
+    # share the same expected layout.
+    if answer in ("project", "research"):
         expected_dirs = [project.path / "src" / slug, project.path / "data"]
     else:
         expected_dirs = [project.path / "src" / slug]

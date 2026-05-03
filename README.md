@@ -3,7 +3,7 @@
 This repository contains:
 
 1. **bblocks-projects** - A CLI tool for creating, updating, and enhancing Python projects
-2. **template/** - Copier templates for Python packages and research projects
+2. **template/** - Copier templates for Python packages and general projects (analysis, pipelines, internal tools)
 
 ## Repository Structure
 
@@ -27,7 +27,7 @@ bblocks-projects/
 A command-line tool that makes it easy to work with these templates.
 
 **Features:**
-- Create new Python projects (packages or research)
+- Create new Python projects (packages or general projects)
 - Update existing projects when templates improve
 - Add individual components (pre-commit, ruff, CI, etc.) to any project
 
@@ -45,7 +45,7 @@ uv tool install bblocks-projects
 Full documentation is available at [bblocks-projects/docs/](bblocks-projects/docs/):
 
 - [Getting Started](bblocks-projects/docs/docs/getting-started.md) - Installation and first project
-- [Creating Projects](bblocks-projects/docs/docs/creating-projects.md) - Package vs research projects
+- [Creating Projects](bblocks-projects/docs/docs/creating-projects.md) - Package vs project layouts
 - [Updating Projects](bblocks-projects/docs/docs/updating-projects.md) - Keeping projects in sync
 - [Adding Components](bblocks-projects/docs/docs/adding-components.md) - Enhance existing projects
 
@@ -73,11 +73,11 @@ The template supports two project types:
 - PyPI publishing workflow
 - Type hint support
 
-**Research/Analysis** - For data analysis projects:
-- Organized scripts/ directory
-- Paths configuration
-- Logger setup
-- raw_data/ and output/ directories
+**Project** - For analysis, pipelines, and internal tools:
+- src-layout for reusable code (`src/{slug}/`)
+- `data/raw/` (gitignored) and `data/processed/` directories
+- Optional `notebooks/` for Jupyter exploration
+- Looser ruff rules suited to exploratory code
 
 ### Template Features
 
@@ -94,11 +94,11 @@ The template uses Jinja2 conditionals to include different files based on projec
 
 ```
 template/
-├── {% if project_type == 'package' %}src{% endif %}/
-│   └── [package files]
-├── {% if project_type == 'research' %}scripts{% endif %}/
-│   └── [analysis files]
-└── pyproject.toml.jinja  # Different configs per type
+├── {% if project_type == 'package' %}src{% endif %}/         # package: src/{slug}/ + py.typed
+├── {% if project_type != 'package' %}src{% endif %}/         # project: src/{slug}/ for reusable code
+├── {% if project_type != 'package' %}data{% endif %}/        # project: data/raw + data/processed
+├── {% if project_type == 'package' %}tests{% endif %}/       # package only
+└── pyproject.toml.jinja                                       # branches on project_type
 ```
 
 See the [Copier documentation](https://copier.readthedocs.io/) for more on template syntax.
@@ -162,7 +162,7 @@ uv run ruff check .
 
 ### Template Testing Best Practices
 
-- Test both package and research project types
+- Test both `package` and `project` types (and verify legacy `research` answers still work)
 - Verify generated projects pass their CI checks
 - Check that `uv sync` and `uv run pytest` work in generated packages
 - Ensure `.copier-answers.yml` is created (needed for updates)

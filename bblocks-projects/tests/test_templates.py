@@ -52,13 +52,30 @@ def _render(template_src: Path, dst: Path, project_type: str, **overrides: str) 
     return dst
 
 
-def test_research_has_lint_only_ci_no_release(
+def test_project_has_lint_only_ci_no_release(
     template_src: Path, tmp_path: Path
 ) -> None:
-    rendered = _render(template_src, tmp_path / "rendered", "research")
+    rendered = _render(template_src, tmp_path / "rendered", "project")
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
     assert "lint:" in ci
     assert "test:" not in ci
+    assert not (rendered / ".github" / "workflows" / "release.yml").exists()
+
+
+def test_legacy_research_value_still_renders_project_layout(
+    template_src: Path, tmp_path: Path
+) -> None:
+    """`project_type: research` (legacy) renders the same non-package layout.
+
+    Old projects re-rendered via `copier update` still have `research` in
+    their answers file; the template's `!= 'package'` conditionals must
+    keep treating that as the project layout.
+    """
+    rendered = _render(template_src, tmp_path / "rendered", "research")
+    assert (rendered / "src" / "test_project").is_dir()
+    assert (rendered / "data" / "raw" / ".gitkeep").exists()
+    assert (rendered / "data" / "processed" / ".gitkeep").exists()
+    assert not (rendered / "tests").exists()
     assert not (rendered / ".github" / "workflows" / "release.yml").exists()
 
 

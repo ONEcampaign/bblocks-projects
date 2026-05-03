@@ -27,15 +27,18 @@ def _write_answers(project: Path, contents: str) -> None:
     (project / ".copier-answers.yml").write_text(contents, encoding="utf-8")
 
 
-def test_detect_type_reads_copier_answers_research(project_with_src: Path) -> None:
-    """detect_type() reads project_type from .copier-answers.yml first.
+def test_detect_type_reads_copier_answers_project(project_with_src: Path) -> None:
+    """detect_type() reads project_type from .copier-answers.yml first."""
+    _write_answers(project_with_src, "project_type: project\nproject_name: demo\n")
+    assert Project(project_with_src).detect_type() == "project"
 
-    A research project with a src/ dir (which would otherwise be classified
-    as "package" by the heuristic) is correctly classified as "research"
-    when .copier-answers.yml says so.
-    """
+
+def test_detect_type_normalizes_legacy_research_to_project(
+    project_with_src: Path,
+) -> None:
+    """Legacy `project_type: research` normalizes to `project` on read (BC)."""
     _write_answers(project_with_src, "project_type: research\nproject_name: demo\n")
-    assert Project(project_with_src).detect_type() == "research"
+    assert Project(project_with_src).detect_type() == "project"
 
 
 def test_detect_type_reads_copier_answers_package(tmp_path: Path) -> None:

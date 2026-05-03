@@ -20,7 +20,7 @@ Python Project Templates
 
 Available project types:
   - Package: Full Python package with tests, CI/CD, and PyPI publishing
-  - Research: Data analysis project with organized scripts structure
+  - Project: Analysis, pipeline, or internal-tool project with src/ + data/ layout
 """
 
 

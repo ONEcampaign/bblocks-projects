@@ -53,8 +53,7 @@ These files are managed by the template and get updated:
 Your code and data stay untouched:
 
 - **Package projects:** Everything in `src/` and `tests/`
-- **Research projects:** Your analysis scripts in `scripts/`
-- `raw_data/` and `output/` directories
+- **Project (non-package):** Code in `src/{slug}/` and contents of `data/raw/` and `data/processed/`
 - Custom code you've added
 - Git history
 
@@ -244,7 +243,7 @@ uv run pytest
 
 # Check code quality
 uv run ruff check .
-uvx ty check src/  # or scripts/ for research
+uvx ty check src/{slug}
 
 # Try pre-commit
 uv run pre-commit run --all-files

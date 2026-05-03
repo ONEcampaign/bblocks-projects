@@ -14,7 +14,7 @@ class ComponentDef:
     pyproject_sections: list[str] = field(default_factory=list)
     dev_deps: list[str] = field(default_factory=list)
     post_install_steps: list[str] = field(default_factory=list)
-    requires_project_type: Literal["package", "research"] | None = None
+    requires_project_type: Literal["package", "project"] | None = None
 
 
 COMPONENTS_REGISTRY: dict[str, ComponentDef] = {

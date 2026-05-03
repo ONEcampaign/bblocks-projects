@@ -11,7 +11,7 @@ You have three options for using bblocks-projects:
 No installation required. Run directly with uvx:
 
 ```bash
-uvx bblocks-projects create my-research-project
+uvx bblocks-projects create my-first-project
 ```
 
 This downloads and runs bblocks-projects automatically. Perfect for trying it out or occasional use.
@@ -68,8 +68,8 @@ You'll see a series of questions to customize your project:
    Analysis of climate data
 
 🎤 What type of project?
-   1 - Package (for libraries to publish on PyPI)
-   2 - Research/Analysis (for data analysis and scripts)
+   1 - Package (library published to PyPI)
+   2 - Project (analysis, pipelines, internal tools)
    [2]
 
 🎤 Author name
@@ -287,14 +287,14 @@ You've created your first project! Now you can:
 If you want to create projects faster, use defaults:
 
 ```bash
-uvx bblocks-projects create my-project --type research --defaults
+uvx bblocks-projects create my-project --type project --defaults
 ```
 
 This uses default answers for all questions. You can override specific values:
 
 ```bash
 uvx bblocks-projects create my-project \
-  --type research \
+  --type project \
   --defaults \
   --data author_name="Jane Smith" \
   --data author_email="jane@one.org"

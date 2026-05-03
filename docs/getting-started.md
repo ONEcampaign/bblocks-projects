@@ -50,7 +50,7 @@ uvx bblocks-projects create donor-analysis \
 
 `uvx` downloads `bblocks-projects` into a temporary cache, runs it, and exits. You don't need to install anything.
 
-You'll be asked a handful of questions — confirm the project slug (suggested: `donor_analysis`), author name and email, Python version (default `3.11`), license (default `MIT`), and whether to include a `notebooks/` directory (default no). Press Enter to accept any default. After the questions:
+You'll be asked a handful of questions — confirm the project slug (suggested: `donor_analysis`), author name and email, Python version (default `3.13`), license (default `MIT`), and whether to include a `notebooks/` directory (default no). Press Enter to accept any default. After the questions:
 
 ```
 ✓ Project created successfully at donor-analysis
@@ -168,7 +168,7 @@ The template ships with three of them already wired up:
 ```bash
 uv run ruff check .                 # linting
 uv run ruff format --check .        # formatting
-uvx ty check src/donor_analysis     # type checking
+uv run ty check src/donor_analysis  # type checking
 ```
 
 All three should report no problems on the code from Step 4. If `ruff format --check` complains, run `uv run ruff format .` to apply the fix.

@@ -65,7 +65,7 @@ cd bblocks-projects
 uv sync
 uv run pytest
 uv run ruff check .
-uvx ty check src/bblocks/projects
+uv run ty check src/bblocks/projects
 
 # Docs site (run from the repo root)
 uv run --project bblocks-projects mkdocs serve

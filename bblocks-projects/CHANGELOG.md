@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-05-03
+
+### Changed
+
+- Generated project default Python version is now `3.13` (was `3.11`).
+  3.11 entered security-only support in October 2024.
+- Generated `pyproject.toml`, CI workflow, pre-commit hook, and README use
+  `uv run ty` instead of `uvx ty`, picking up the version pin from the
+  dev-dep group.
+
+### Added
+
+- Python `3.14` is now selectable as the minimum version.
+- Generated `.gitignore` ignores `.env` files (with a `!.env.example` carve-out).
+
+### Fixed
+
+- CI test matrix no longer emits duplicate versions for projects pinned to
+  `3.12` or `3.13`.
+- `.claude/` entry in generated `.gitignore` is now directory-only.
+
 ## [1.0.0] - 2026-05-02
 
 This release marks the first stable version. The four-command surface

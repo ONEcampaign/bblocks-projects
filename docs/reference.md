@@ -111,7 +111,7 @@ Source of truth: `copier.yml` in the [template repo](https://github.com/ONEcampa
 | `include_notebooks` | `bool` | `false` | `true`, `false` | only when `project_type != 'package'` |
 | `author_name` | `str` | `""` | any string | always |
 | `author_email` | `str` | `""` | any string | always |
-| `python_version` | `str` | `3.11` | `3.11`, `3.12`, `3.13` | always |
+| `python_version` | `str` | `3.13` | `3.11`, `3.12`, `3.13`, `3.14` | always |
 | `license` | `str` | `mit` | `mit`, `apache`, `bsd3`, `none` | always |
 | `github_username` | `str` | — | any string | only when `project_type == 'package'` |
 

@@ -25,8 +25,12 @@ classifiers = [
     {%- if python_version == "3.11" %}
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     {%- elif python_version == "3.12" %}
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    {%- elif python_version == "3.13" %}
+    "Programming Language :: Python :: 3.14",
     {%- endif %}
 ]
 {% endif %}
@@ -90,16 +94,11 @@ ignore = [
     "ANN401",   # Allow `Any` in typed signatures
 ]
 {% else %}
-# Non-package projects (analysis, pipelines, internal tools) use a looser
-# rule set. Dropped: N (pep8-naming bans X/y/df), SIM (rewrites hurt numerical
-# clarity), PL (complexity rules fire on legitimate analysis scripts), ERA
-# (commented-out code is normal during exploration), PERF (clarity > micro-opt
-# here), ANN (annotations not enforced for one-off scripts).
 select = [
     "E", "W", "F",      # pycodestyle, pyflakes
     "I",                 # isort
     "UP",                # pyupgrade
-    "B",                 # bugbear (real bug catches)
+    "B",                 # bugbear
     "C4",                # comprehensions
     "RUF",               # ruff-specific
 ]

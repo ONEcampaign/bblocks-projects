@@ -55,11 +55,12 @@ author_email:
 python_version:
   type: str
   help: Minimum Python version
-  default: "3.11"
+  default: "3.13"
   choices:
     - "3.11"
     - "3.12"
     - "3.13"
+    - "3.14"
 
 # License
 license:
@@ -121,7 +122,7 @@ _message_after_copy: |
   8. Run quality checks:
 
      $ uv run ruff check .
-     $ uvx ty check src/{{ project_slug }}
+     $ uv run ty check src/{{ project_slug }}
 
   9. Optional: install pytest dev deps (config is already set up; merge will
      report "Conflicts detected" — use --force to confirm a safe re-merge):
@@ -131,7 +132,7 @@ _message_after_copy: |
   7. Run quality checks:
 
      $ uv run ruff check .
-     $ uvx ty check src/{{ project_slug }}
+     $ uv run ty check src/{{ project_slug }}
 
   8. Optional: install pytest dev deps (config is already set up; merge will
      report "Conflicts detected" — use --force to confirm a safe re-merge):

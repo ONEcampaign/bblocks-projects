@@ -54,7 +54,7 @@ Use `--defaults` to accept every default answer non-interactively:
 uvx bblocks-projects create my-project --type project --defaults
 ```
 
-The defaults are: project type `project`, Python `3.11`, license `MIT`, no notebooks. Author name and email come from the GitHub CLI (if logged in); otherwise both default to empty strings, and Copier still prompts for them.
+The defaults are: project type `project`, Python `3.13`, license `MIT`, no notebooks. Author name and email come from the GitHub CLI (if logged in); otherwise both default to empty strings, and Copier still prompts for them.
 
 ## Override specific values
 

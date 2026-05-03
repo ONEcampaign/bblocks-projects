@@ -48,4 +48,4 @@ jobs:
       - name: Run type checking
         run: |
           cd bblocks-projects
-          uvx ty check src/
+          uv run ty check src/

@@ -36,14 +36,14 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Run ty
-        run: uvx ty check 'src/{{ project_slug }}'
+        run: uv run ty check 'src/{{ project_slug }}'
 
 {% if project_type == 'package' %}
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["{{ python_version }}", "3.12", "3.13"]
+        python-version: [{% if python_version == "3.11" %}"3.11", "3.12", "3.13", "3.14"{% elif python_version == "3.12" %}"3.12", "3.13", "3.14"{% elif python_version == "3.13" %}"3.13", "3.14"{% else %}"3.14"{% endif %}]
     steps:
       - uses: actions/checkout@v6
 

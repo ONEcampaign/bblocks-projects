@@ -94,7 +94,7 @@ def test_ci_quotes_project_slug_in_run_lines(
 ) -> None:
     rendered = _render(template_src, tmp_path / "rendered", "package")
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
-    assert "uvx ty check 'src/test_project'" in ci
+    assert "uv run ty check 'src/test_project'" in ci
     assert "--cov='src/test_project'" in ci
 
 
@@ -106,6 +106,30 @@ def test_ci_quotes_python_version_in_run_lines(
     release = (rendered / ".github" / "workflows" / "release.yml").read_text()
     assert "uv python install '3.11'" in ci
     assert "uv python install '3.11'" in release
+
+
+def test_python_314_renders_with_correct_classifiers_and_matrix(
+    template_src: Path, tmp_path: Path
+) -> None:
+    rendered = _render(
+        template_src, tmp_path / "py314", "package", python_version="3.14"
+    )
+    pyproject = (rendered / "pyproject.toml").read_text()
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
+    assert 'requires-python = ">=3.14"' in pyproject
+    assert "Programming Language :: Python :: 3.14" in pyproject
+    assert "Programming Language :: Python :: 3.13" not in pyproject
+    assert 'target-version = "py314"' in pyproject
+    assert 'python-version = "3.14"' in pyproject
+    assert 'python-version: ["3.14"]' in ci
+
+
+def test_python_311_matrix_includes_all_supported_versions(
+    template_src: Path, tmp_path: Path
+) -> None:
+    rendered = _render(template_src, tmp_path / "py311", "package")
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
+    assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in ci
 
 
 def test_validator_rejects_bad_project_slug(template_src: Path, tmp_path: Path) -> None:

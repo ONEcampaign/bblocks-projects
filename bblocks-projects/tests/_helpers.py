@@ -19,6 +19,7 @@ def make_bblocks_project(
         "pypi-publish",
     ),
     commit: str | None = "abc123def456abc123def456abc123def4567890",
+    github_username: str | None = None,
 ) -> Path:
     """Build a synthetic bblocks-managed project at `tmp_path`.
 
@@ -61,6 +62,8 @@ def make_bblocks_project(
         f"project_slug: {slug}",
         f"python_version: '{python_version}'",
     ]
+    if github_username is not None:
+        answers_lines.append(f"github_username: {github_username}")
     if commit is not None:
         answers_lines.append(f"_commit: {commit}")
     (tmp_path / ".copier-answers.yml").write_text(

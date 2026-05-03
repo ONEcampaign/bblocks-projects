@@ -219,8 +219,8 @@ def create(
             destination = Path.cwd() / dir_name
     elif str(destination) == ".":
         destination = Path.cwd()
+    assert destination is not None  # narrowed by branches above
 
-    # Check if destination exists as a file (not a directory)
     if destination.exists() and destination.is_file():
         console.print(
             f"[bold red]Error:[/bold red] '{destination}' is a file, not a directory."

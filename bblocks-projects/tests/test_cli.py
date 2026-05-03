@@ -185,8 +185,15 @@ def test_create_passes_cleanup_on_error_false(
     assert kwargs["cleanup_on_error"] is False
 
 
-def test_create_preflights_git_returncode_nonzero(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    ("failing_tool", "failure_mode"),
+    [("git", "returncode_nonzero"), ("uv", "filenotfound")],
+)
+def test_create_preflights_missing_tool_exits_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_tool: str,
+    failure_mode: str,
 ) -> None:
     mock_run_copy = MagicMock()
     monkeypatch.setattr("bblocks.projects.cli.run_copy", mock_run_copy)
@@ -194,40 +201,19 @@ def test_create_preflights_git_returncode_nonzero(
     def fake_subprocess_run(
         cmd: list[str], **kwargs: object
     ) -> subprocess.CompletedProcess:  # type: ignore[type-arg]
-        if cmd[0] == "git":
+        if cmd[0] == failing_tool:
+            if failure_mode == "filenotfound":
+                raise FileNotFoundError(f"{failing_tool} not found")
             return subprocess.CompletedProcess(cmd, returncode=1)
         return subprocess.CompletedProcess(cmd, returncode=0)
 
     monkeypatch.setattr("bblocks.projects.cli.subprocess.run", fake_subprocess_run)
     result = runner.invoke(
-        app,
-        ["create", str(tmp_path / "newproj"), "--defaults", "--no-github"],
+        app, ["create", str(tmp_path / "newproj"), "--defaults", "--no-github"]
     )
     assert result.exit_code == 1
-    assert "git" in result.stdout
+    assert failing_tool in result.stdout
     mock_run_copy.assert_not_called()
-
-
-def test_create_preflights_uv_filenotfound(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    mock_run_copy = MagicMock()
-    monkeypatch.setattr("bblocks.projects.cli.run_copy", mock_run_copy)
-
-    def fake_subprocess_run(
-        cmd: list[str], **kwargs: object
-    ) -> subprocess.CompletedProcess:  # type: ignore[type-arg]
-        if cmd[0] == "uv":
-            raise FileNotFoundError("uv not found")
-        return subprocess.CompletedProcess(cmd, returncode=0)
-
-    monkeypatch.setattr("bblocks.projects.cli.subprocess.run", fake_subprocess_run)
-    result = runner.invoke(
-        app,
-        ["create", str(tmp_path / "newproj"), "--defaults", "--no-github"],
-    )
-    assert result.exit_code == 1
-    assert "uv" in result.stdout
     mock_run_copy.assert_not_called()
 
 

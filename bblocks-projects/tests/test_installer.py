@@ -216,11 +216,11 @@ def test_install_component_message_renders_build_system_literal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """[build-system] must appear literally in console output, not as a Rich tag."""
-    make_bblocks_project(tmp_path, with_components=(), project_type="package")
-    (tmp_path / ".copier-answers.yml").write_text(
-        "github_username: testuser\nproject_type: package\n"
-        "project_name: demo\nproject_slug: demo\npython_version: '3.11'\n",
-        encoding="utf-8",
+    make_bblocks_project(
+        tmp_path,
+        with_components=(),
+        project_type="package",
+        github_username="testuser",
     )
 
     buf = io.StringIO()

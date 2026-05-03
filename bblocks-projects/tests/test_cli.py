@@ -1,5 +1,6 @@
 """Tests for the CLI interface."""
 
+import re
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -12,6 +13,13 @@ from bblocks.projects.cli import app
 from tests._helpers import make_bblocks_project as _make_bblocks_project
 
 runner = CliRunner()
+
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    """Strip ANSI styling so substring checks survive Rich's per-character coloring."""
+    return _ANSI_ESCAPE.sub("", text)
 
 
 def test_version() -> None:
@@ -53,14 +61,14 @@ def test_create_help_shows_template_flag() -> None:
     """Test that create --help shows --template / -T flag."""
     result = runner.invoke(app, ["create", "--help"])
     assert result.exit_code == 0
-    assert "--template" in result.stdout
+    assert "--template" in _plain(result.stdout)
 
 
 def test_update_help_shows_template_flag() -> None:
     """Test that update --help shows --template / -T flag."""
     result = runner.invoke(app, ["update", "--help"])
     assert result.exit_code == 0
-    assert "--template" in result.stdout
+    assert "--template" in _plain(result.stdout)
 
 
 def test_doctor_help() -> None:

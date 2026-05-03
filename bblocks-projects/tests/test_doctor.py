@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import tomlkit
 
 from bblocks.projects.components import COMPONENTS_REGISTRY
 from bblocks.projects.doctor import Finding, _component_installed, run_checks
@@ -39,7 +40,9 @@ def test_run_checks_short_circuits_on_catastrophic_pyproject(tmp_path: Path) -> 
 
 
 def test_run_checks_short_circuits_on_catastrophic_answers(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n', encoding="utf-8"
+    )
     (tmp_path / ".copier-answers.yml").write_text("{ bad yaml", encoding="utf-8")
     project = Project(tmp_path)
     findings = run_checks(project, check_updates=False)
@@ -93,37 +96,47 @@ def test_check_drift_python_version_mismatch(tmp_path: Path) -> None:
     (p / ".copier-answers.yml").write_text(answers, encoding="utf-8")
     project = Project(p)
     findings = run_checks(project, check_updates=False)
-    version_findings = [f for f in findings if f.code == "drift.python_version_mismatch"]
+    version_findings = [
+        f for f in findings if f.code == "drift.python_version_mismatch"
+    ]
     assert len(version_findings) == 1
     assert "3.12" in version_findings[0].message
     assert "3.11" in version_findings[0].message
 
 
-def test_component_installed_detects_template_file(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n', encoding="utf-8")
+def test_component_installed_requires_all_categories(tmp_path: Path) -> None:
+    # pre-commit has template_files + dev_deps; both must be present
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\n', encoding="utf-8"
+    )
     (tmp_path / ".pre-commit-config.yaml").touch()
     project = Project(tmp_path)
     comp = COMPONENTS_REGISTRY["pre-commit"]
-    assert _component_installed(comp, project) is True
+    # template file present but dev-dep absent → False (ALL-of)
+    assert _component_installed(comp, project) is False
 
 
-def test_component_installed_detects_pyproject_section(tmp_path: Path) -> None:
+def test_component_installed_detects_pyproject_section_only_is_insufficient(
+    tmp_path: Path,
+) -> None:
+    # ruff has pyproject_sections + dev_deps; section present but dep absent → False
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\n[tool.ruff]\n', encoding="utf-8"
     )
     project = Project(tmp_path)
     comp = COMPONENTS_REGISTRY["ruff"]
-    assert _component_installed(comp, project) is True
+    assert _component_installed(comp, project) is False
 
 
-def test_component_installed_detects_dev_dep(tmp_path: Path) -> None:
+def test_component_installed_dev_dep_only_is_insufficient(tmp_path: Path) -> None:
+    # pre-commit has template_files + dev_deps; dep present but template file absent → False
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\n[dependency-groups]\ndev = ["pre-commit>=3.0.0"]\n',
         encoding="utf-8",
     )
     project = Project(tmp_path)
     comp = COMPONENTS_REGISTRY["pre-commit"]
-    assert _component_installed(comp, project) is True
+    assert _component_installed(comp, project) is False
 
 
 def test_check_components_skips_wrong_project_type(tmp_path: Path) -> None:
@@ -289,3 +302,32 @@ def test_check_template_version_handles_short_remote_sha(
     # local_sha.startswith(short_remote) → True → no finding
     template_findings = [f for f in findings if f.code.startswith("template.")]
     assert template_findings == []
+
+
+def test_component_installed_false_when_template_file_deleted(tmp_path: Path) -> None:
+    p = _make_bblocks_project(tmp_path, with_components=("pre-commit",))
+    (p / ".pre-commit-config.yaml").unlink()
+    project = Project(p)
+    comp = COMPONENTS_REGISTRY["pre-commit"]
+    assert _component_installed(comp, project) is False
+
+
+def test_component_installed_false_when_dev_dep_removed(tmp_path: Path) -> None:
+    p = _make_bblocks_project(tmp_path, with_components=("pre-commit",))
+    pyproject_path = p / "pyproject.toml"
+    doc = tomlkit.loads(pyproject_path.read_text(encoding="utf-8"))
+    dev = doc["dependency-groups"]["dev"]  # type: ignore[index]
+    doc["dependency-groups"]["dev"] = [  # type: ignore[index]
+        d for d in dev if "pre-commit" not in str(d)
+    ]
+    pyproject_path.write_text(tomlkit.dumps(doc), encoding="utf-8")
+    project = Project(p)
+    comp = COMPONENTS_REGISTRY["pre-commit"]
+    assert _component_installed(comp, project) is False
+
+
+def test_component_installed_true_when_all_artifacts_present(tmp_path: Path) -> None:
+    p = _make_bblocks_project(tmp_path, with_components=("pre-commit",))
+    project = Project(p)
+    comp = COMPONENTS_REGISTRY["pre-commit"]
+    assert _component_installed(comp, project) is True

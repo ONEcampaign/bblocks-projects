@@ -43,9 +43,7 @@ def make_bblocks_project(
 
     # build-system is already in the base template below; skip to avoid duplicate header.
     section_toml_parts = [
-        f"[{section}]\n"
-        for section in pyproject_sections
-        if section != "build-system"
+        f"[{section}]\n" for section in pyproject_sections if section != "build-system"
     ]
 
     dev_deps_toml = ", ".join(dev_deps) if dev_deps else ""

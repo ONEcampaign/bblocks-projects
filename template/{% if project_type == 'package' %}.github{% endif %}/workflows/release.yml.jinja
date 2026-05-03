@@ -27,7 +27,7 @@ jobs:
             {% raw %}${{ runner.os }}{% endraw %}-uv-
 
       - name: Set up Python {{ python_version }}
-        run: uv python install {{ python_version }}
+        run: uv python install '{{ python_version }}'
 
       - name: Build package
         run: uv build

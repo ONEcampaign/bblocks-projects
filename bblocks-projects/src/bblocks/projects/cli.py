@@ -40,6 +40,33 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _preflight_required_tools() -> None:
+    """Verify git and uv are on PATH; exit 1 with a helpful message otherwise."""
+    missing: list[str] = []
+    for tool in ("git", "uv"):
+        try:
+            result = subprocess.run(
+                [tool, "--version"],
+                capture_output=True,
+                check=False,
+                timeout=5,
+            )
+            if result.returncode != 0:
+                missing.append(tool)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            missing.append(tool)
+    if missing:
+        console.print(
+            f"[bold red]Error:[/bold red] Required tool(s) not found on PATH: "
+            f"{', '.join(missing)}"
+        )
+        console.print(
+            "Install the missing tool(s) and re-run "
+            "[bold]bblocks-projects create[/bold]."
+        )
+        raise typer.Exit(code=1)
+
+
 def _announce_template_source(cli_template: str | None, resolved_url: str) -> None:
     """Print the source of a non-default template URL when not set via CLI."""
     if cli_template is not None or resolved_url == TEMPLATE_URL:
@@ -167,7 +194,7 @@ def create(
         bblocks-projects create my-package --type package --defaults
 
         # Create using a specific template version
-        bblocks-projects create my-project --ref v1.0.0
+        bblocks-projects create my-project --ref main
 
         # Override template variables
         bblocks-projects create my-project --data author_name="Jane Doe"
@@ -248,6 +275,7 @@ def create(
             key, value = item.split("=", 1)
             data_dict[key] = value
 
+    _preflight_required_tools()
     try:
         run_copy(
             src_path=resolved_url,
@@ -255,6 +283,7 @@ def create(
             vcs_ref=template_ref or DEFAULT_REF,
             data=data_dict if data_dict else None,
             defaults=defaults,
+            cleanup_on_error=False,
             unsafe=True,  # Allow template tasks like git init
         )
         console.print(
@@ -275,11 +304,12 @@ def create(
 
 @app.command()
 def update(
-    destination: Path = typer.Option(
-        Path.cwd(),
+    destination: Path | None = typer.Option(
+        None,
         "--path",
         "-p",
         help="Path to the project to update (defaults to current directory)",
+        show_default=False,
     ),
     template_ref: str | None = typer.Option(
         None,
@@ -307,6 +337,9 @@ def update(
 ) -> None:
     """Update an existing project to the latest template version.
 
+    Existing answers are silently re-used by default; pass --no-skip-answered
+    to re-prompt for any of them.
+
     This command should be run from within the project directory or use --path.
 
     Examples:
@@ -315,7 +348,7 @@ def update(
         bblocks-projects update
 
         # Update to specific template version
-        bblocks-projects update --ref v1.2.0
+        bblocks-projects update --ref main
 
         # Update a specific project
         bblocks-projects update --path /path/to/my-project
@@ -323,6 +356,7 @@ def update(
         # Re-answer all questions
         bblocks-projects update --no-skip-answered
     """
+    destination = destination or Path.cwd()
     console.print(
         f"[bold cyan]Updating project at:[/bold cyan] {destination.absolute()}"
     )
@@ -361,9 +395,11 @@ def update(
     try:
         run_update(
             dst_path=destination,
-            vcs_ref=template_ref,
+            vcs_ref=template_ref or DEFAULT_REF,
             data=data_dict,
             skip_answered=skip_answered,
+            overwrite=True,
+            defaults=True,
             unsafe=True,  # Allow template tasks
         )
         console.print("\n[bold green]✓[/bold green] Project updated successfully!")
@@ -386,11 +422,12 @@ def add(
         None,
         help="Component(s) to add: pre-commit, ruff, ci, pytest, pypi-publish",
     ),
-    path: Path = typer.Option(
-        Path.cwd(),
+    path: Path | None = typer.Option(
+        None,
         "--path",
         "-p",
         help="Path to the project (defaults to current directory)",
+        show_default=False,
     ),
     force: bool = typer.Option(
         False,
@@ -433,6 +470,7 @@ def add(
         # List available components
         bblocks-projects add --list
     """
+    path = path or Path.cwd()
     # Deferred imports keep --help and --version fast; the heavy component
     # machinery only loads when `add` is actually invoked.
     from bblocks.projects.components import (  # noqa: PLC0415
@@ -518,14 +556,14 @@ def add(
         f"\n[bold]Summary:[/bold] Installed {success_count}/{len(components)} "
         "components"
     )
+    if success_count < len(components):
+        raise typer.Exit(code=1)
 
 
 def _render_doctor_report(project: "Project", findings: "list[Finding]") -> None:
     from bblocks.projects.doctor import SECTIONS  # noqa: PLC0415
 
-    console.print(
-        f"\n[bold cyan]Doctor report for[/bold cyan] {project.path}\n"
-    )
+    console.print(f"\n[bold cyan]Doctor report for[/bold cyan] {project.path}\n")
     for code_prefix, section_name in SECTIONS:
         section_findings = [f for f in findings if f.code.startswith(f"{code_prefix}.")]
         if not section_findings:
@@ -563,11 +601,12 @@ def _render_doctor_report(project: "Project", findings: "list[Finding]") -> None
 
 @app.command()
 def doctor(
-    path: Path = typer.Option(
-        Path.cwd(),
+    path: Path | None = typer.Option(
+        None,
         "--path",
         "-p",
         help="Path to the project to diagnose (defaults to current directory)",
+        show_default=False,
     ),
     strict: bool = typer.Option(
         False,
@@ -599,6 +638,7 @@ def doctor(
     from bblocks.projects.doctor import run_checks  # noqa: PLC0415
     from bblocks.projects.project import Project  # noqa: PLC0415
 
+    path = path or Path.cwd()
     abs_path = path.absolute()
     if not (abs_path / "pyproject.toml").exists():
         console.print(

@@ -10,6 +10,11 @@ project_slug:
   type: str
   help: Python-compatible project name (e.g., "my_awesome_project")
   default: "{{ project_name|lower|replace(' ', '_')|replace('-', '_') }}"
+  validator: >-
+    {%- if not (project_slug | regex_search('^[a-zA-Z][a-zA-Z0-9_]*$')) -%}
+    project_slug must be a valid Python identifier
+    (letters, digits, and underscores only; must start with a letter)
+    {%- endif -%}
 
 project_description:
   type: str

@@ -1,9 +1,12 @@
 """Tests for component installation, focused on post-install hint substitution."""
 
 import io
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from rich.console import Console as RichConsole
@@ -15,6 +18,7 @@ from bblocks.projects.installer import (
     rendered_template_for,
 )
 from bblocks.projects.project import Project
+from tests._helpers import make_bblocks_project
 
 
 @pytest.fixture
@@ -116,8 +120,10 @@ def test_rendered_template_for_renders_once_for_multiple_installs(
     ):
         for comp in components:
             install_component(
-                comp, project,
-                force=True, interactive=False,
+                comp,
+                project,
+                force=True,
+                interactive=False,
                 rendered_template_dir=rendered_dir,
             )
 
@@ -163,3 +169,80 @@ def test_install_component_renders_internally_when_no_dir_passed(
         install_component(component, project, force=True, interactive=False)
 
     assert mock_render.call_count == 1
+
+
+def _patch_rendered_template_for(
+    monkeypatch: pytest.MonkeyPatch, files: dict[str, str]
+) -> None:
+    """Replace `rendered_template_for` with a stub that yields a temp dir holding `files`."""
+
+    @contextmanager
+    def _fake(_project: Any) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory(prefix="bblocks-test-") as d:
+            td = Path(d)
+            for relpath, content in files.items():
+                target = td / relpath
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+            yield td
+
+    monkeypatch.setattr("bblocks.projects.installer.rendered_template_for", _fake)
+
+
+def test_install_component_yes_installs_dev_deps(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Non-interactive install must call _add_dependencies with the component's dev_deps."""
+    make_bblocks_project(tmp_path, with_components=())
+
+    buf = io.StringIO()
+    test_console = RichConsole(file=buf, force_terminal=False, width=200)
+    monkeypatch.setattr("bblocks.projects.installer.console", test_console)
+
+    project = Project(tmp_path)
+    comp = COMPONENTS_REGISTRY["pre-commit"]
+
+    add_deps_mock = MagicMock()
+    monkeypatch.setattr("bblocks.projects.installer._add_dependencies", add_deps_mock)
+    _patch_rendered_template_for(monkeypatch, {".pre-commit-config.yaml": ""})
+
+    result = install_component(comp, project, interactive=False)
+
+    assert result is True
+    add_deps_mock.assert_called_once_with(project, comp.dev_deps, dev=True)
+
+
+def test_install_component_message_renders_build_system_literal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """[build-system] must appear literally in console output, not as a Rich tag."""
+    make_bblocks_project(tmp_path, with_components=(), project_type="package")
+    (tmp_path / ".copier-answers.yml").write_text(
+        "github_username: testuser\nproject_type: package\n"
+        "project_name: demo\nproject_slug: demo\npython_version: '3.11'\n",
+        encoding="utf-8",
+    )
+
+    buf = io.StringIO()
+    test_console = RichConsole(file=buf, force_terminal=False, width=200)
+    monkeypatch.setattr("bblocks.projects.installer.console", test_console)
+
+    project = Project(tmp_path)
+    comp = COMPONENTS_REGISTRY["pypi-publish"]
+
+    monkeypatch.setattr("bblocks.projects.installer._add_dependencies", MagicMock())
+    _patch_rendered_template_for(
+        monkeypatch,
+        {
+            ".github/workflows/release.yml": "",
+            "pyproject.toml": (
+                '[build-system]\nrequires = ["uv_build"]\nbuild-backend = "uv_build"\n'
+            ),
+        },
+    )
+
+    install_component(comp, project, interactive=False, force=True)
+
+    output = buf.getvalue()
+    assert "[build-system]" in output
+    assert "  section" not in output

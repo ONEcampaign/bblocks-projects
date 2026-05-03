@@ -178,16 +178,13 @@ def _check_drift_python_version(project: Project) -> list[Finding]:
 
 
 def _component_installed(comp: ComponentDef, project: Project) -> bool:
-    for relpath in comp.template_files:
-        if project.has_file(relpath.removesuffix(".jinja")):
-            return True
-    for section in comp.pyproject_sections:
-        if project.has_config_section(section):
-            return True
-    for dep in comp.dev_deps:
-        if project.has_dev_dependency(_parse_dep_name(dep)):
-            return True
-    return False
+    categories = (
+        (comp.template_files, lambda r: project.has_file(r.removesuffix(".jinja"))),
+        (comp.pyproject_sections, project.has_config_section),
+        (comp.dev_deps, lambda d: project.has_dev_dependency(_parse_dep_name(d))),
+    )
+    checks = [any(pred(item) for item in items) for items, pred in categories if items]
+    return all(checks) if checks else False
 
 
 def _check_components(project: Project) -> list[Finding]:
@@ -222,17 +219,23 @@ def _check_template_version(project: Project) -> list[Finding]:
             check=False,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        return [_template_skipped(f"template-version check skipped: {type(e).__name__}")]
+        return [
+            _template_skipped(f"template-version check skipped: {type(e).__name__}")
+        ]
     if result.returncode != 0:
-        return [_template_skipped(
-            f"template-version check skipped: git ls-remote failed (exit {result.returncode})"
-        )]
+        return [
+            _template_skipped(
+                f"template-version check skipped: git ls-remote failed (exit {result.returncode})"
+            )
+        ]
     line = result.stdout.strip().splitlines()[0] if result.stdout.strip() else ""
     remote_sha = line.split("\t", 1)[0] if line else ""
     if not remote_sha:
-        return [_template_skipped(
-            "template-version check skipped: could not parse git ls-remote output"
-        )]
+        return [
+            _template_skipped(
+                "template-version check skipped: could not parse git ls-remote output"
+            )
+        ]
     local_sha = commit.rsplit("-g", 1)[-1] if "-g" in commit else commit
     if not remote_sha.startswith(local_sha) and not local_sha.startswith(remote_sha):
         return [

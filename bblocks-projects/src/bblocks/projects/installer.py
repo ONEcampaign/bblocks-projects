@@ -300,13 +300,19 @@ def install_component(
 
     if rendered_template_dir is not None:
         return _install_from_rendered(
-            component, project, rendered_template_dir,
-            force=force, interactive=interactive,
+            component,
+            project,
+            rendered_template_dir,
+            force=force,
+            interactive=interactive,
         )
     with rendered_template_for(project) as tempdir:
         return _install_from_rendered(
-            component, project, tempdir,
-            force=force, interactive=interactive,
+            component,
+            project,
+            tempdir,
+            force=force,
+            interactive=interactive,
         )
 
 
@@ -337,8 +343,8 @@ def _install_from_rendered(
             show_config_diff(component.name, existing_tool, config_updates["tool"])
         if "build-system" in config_updates:
             console.print(
-                f"[bold cyan]{component.name}[/bold cyan] will inject "
-                "[build-system] section"
+                f"[bold cyan]{component.name}[/bold cyan] will inject a "
+                r"\[build-system] section into pyproject.toml"
             )
 
         if interactive and not Confirm.ask("\nApply these config changes?"):
@@ -358,9 +364,7 @@ def _install_from_rendered(
             continue
 
         if dest_path.exists() and not force:
-            console.print(
-                f"[yellow]Skipping existing file:[/yellow] {dest_relpath}"
-            )
+            console.print(f"[yellow]Skipping existing file:[/yellow] {dest_relpath}")
             continue
 
         dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -372,9 +376,7 @@ def _install_from_rendered(
             pyproject_data: Any = tomlkit.load(f)
 
         for top_key, top_value in config_updates.items():
-            if top_key == "build-system" and project.has_config_section(
-                "build-system"
-            ):
+            if top_key == "build-system" and project.has_config_section("build-system"):
                 continue
             if top_key in pyproject_data and isinstance(top_value, dict):
                 pyproject_data[top_key] = merge_config_sections(
@@ -407,6 +409,8 @@ def _install_from_rendered(
                     "Add manually with:[/yellow]"
                 )
                 console.print(f"  uv add --dev {' '.join(dev_deps)}")
+        else:
+            _add_dependencies(project, dev_deps, dev=True)
 
     steps = component.post_install_steps
     if steps:

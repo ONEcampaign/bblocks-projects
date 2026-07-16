@@ -1,6 +1,6 @@
 [project]
 name = "bblocks-projects"
-version = "1.0.2"
+version = "1.0.3"
 description = "ONE Data Python project utilities - templates, tools, and workflows"
 readme = "README.md"
 requires-python = ">=3.11"

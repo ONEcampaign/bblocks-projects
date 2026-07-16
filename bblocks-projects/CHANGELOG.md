@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2026-07-16
+
+### Fixed
+
+- **Generated `project`-type projects now define `__version__`.** The
+  non-package `src/{slug}/__init__.py` shipped with only a docstring, but
+  the generated `test_version` asserts `__version__ == "0.1.0"` — so the
+  first CI run of a fresh `project` scaffold with pytest failed. The init
+  now defines `__version__`, matching the package template.
+- **Generated CI uploads coverage with the `files:` input.** The upload
+  step passed `file:` (singular) to `codecov/codecov-action`, an input
+  dropped in the action's v4+ rewrite — so `actionlint` failed on every
+  generated project and the coverage path was mis-named. Now uses
+  `files:` with `codecov/codecov-action@v7`.
+
+### Changed
+
+- **Refreshed the dependency floors scaffolded into new projects** —
+  pytest `>=9.1.0`, pytest-cov `>=7.1.0`, ruff `>=0.15.0`, ty `>=0.0.59`,
+  pre-commit `>=4.6.0`, and the `uv_build` backend `>=0.11.29,<0.12`.
+- **Updated the pinned pre-commit hooks in new projects** —
+  ruff-pre-commit `v0.15.21` and codespell `v2.4.3`, and pinned
+  `mdformat-gfm` / `mdformat-frontmatter` for compatibility with
+  mdformat 1.0's plugin interface.
+- **Updated the GitHub Actions in generated CI and release workflows** —
+  `actions/checkout@v7`, `astral-sh/setup-uv@v8.3.2`, `actions/cache@v6`,
+  and `codecov/codecov-action@v7`.
+- **Bumped the CLI's own dependencies** — copier `>=9.17.0`, rich
+  `>=15.0.0`, tomlkit `>=0.15.0`, typer `>=0.26.0`, and the dev toolchain
+  (pytest, ruff, ty, mkdocs-material).
+
 ## [1.0.2] - 2026-05-03
 
 ### Added

@@ -13,13 +13,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.3.2
 
       - name: Cache uv
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/uv
           key: {% raw %}${{ runner.os }}{% endraw %}-uv-{% raw %}${{ hashFiles('uv.lock') }}{% endraw %}
@@ -46,7 +46,7 @@ jobs:
       url: https://pypi.org/project/{{ project_slug }}
     steps:
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.1.0
+        uses: astral-sh/setup-uv@v8.3.2
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8

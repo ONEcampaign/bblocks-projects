@@ -22,7 +22,7 @@ COMPONENTS_REGISTRY: dict[str, ComponentDef] = {
         name="pre-commit",
         description="Pre-commit hooks with ruff and ty",
         template_files=[".pre-commit-config.yaml.jinja"],
-        dev_deps=["pre-commit>=3.0.0"],
+        dev_deps=["pre-commit>=4.6.0"],
         post_install_steps=[
             "Run: uv sync",
             "Run: uv run pre-commit install",
@@ -39,7 +39,7 @@ COMPONENTS_REGISTRY: dict[str, ComponentDef] = {
             "tool.ruff.lint.per-file-ignores",
             "tool.ruff.format",
         ],
-        dev_deps=["ruff>=0.8.0"],
+        dev_deps=["ruff>=0.15.0"],
         post_install_steps=[
             "Run: uv sync",
             "Check code: uv run ruff check .",
@@ -66,7 +66,7 @@ COMPONENTS_REGISTRY: dict[str, ComponentDef] = {
             "tool.coverage.run",
             "tool.coverage.report",
         ],
-        dev_deps=["pytest>=8.0.0", "pytest-cov>=4.1.0"],
+        dev_deps=["pytest>=9.1.0", "pytest-cov>=7.1.0"],
         post_install_steps=[
             "Run: uv sync",
             "Run tests: uv run pytest",

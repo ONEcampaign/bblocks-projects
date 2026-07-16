@@ -36,18 +36,18 @@ classifiers = [
 {% endif %}
 
 [build-system]
-requires = ["uv_build>=0.11.8,<0.12"]
+requires = ["uv_build>=0.11.29,<0.12"]
 build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
 {% if project_type == 'package' or include_pytest %}
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
+    "pytest>=9.1.0",
+    "pytest-cov>=7.1.0",
 {% endif %}
-    "ty>=0.0.33",
-    "ruff>=0.8.0",
-    "pre-commit>=3.0.0",
+    "ty>=0.0.59",
+    "ruff>=0.15.0",
+    "pre-commit>=4.6.0",
 ]
 
 [tool.ruff]

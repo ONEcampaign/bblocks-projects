@@ -33,7 +33,7 @@ jobs:
       - name: Install dependencies
         run: |
           cd bblocks-projects
-          uv sync --all-extras --dev
+          uv sync --all-extras --dev --frozen
 
       - name: Run tests
         run: |

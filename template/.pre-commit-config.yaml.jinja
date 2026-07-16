@@ -10,7 +10,7 @@ repos:
   # Ruff: fast linter + formatter
   # ---------------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.15.21
     hooks:
       - id: ruff-check
         args: [--fix]
@@ -82,7 +82,7 @@ repos:
   # Spelling (docs + code comments)
   # ---------------------------------------------------------------------------
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.2
+    rev: v2.4.3
     hooks:
       - id: codespell
         args: [--write-changes]
@@ -109,7 +109,7 @@ repos:
     hooks:
       - id: mdformat
         additional_dependencies:
-          - mdformat-gfm
-          - mdformat-frontmatter
+          - mdformat-gfm>=1.0.0
+          - mdformat-frontmatter>=2.1.0
         # Example: limit to docs if desired
         # files: ^(README\.md|docs/|.*/README\.md)$

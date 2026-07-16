@@ -133,7 +133,7 @@ def test_project_with_include_pytest_scaffolds_full_testing(
     ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
     assert "[tool.pytest.ini_options]" in pyproject
     assert "[tool.coverage.run]" in pyproject
-    assert "pytest>=8.0.0" in pyproject
+    assert "pytest>=9.1.0" in pyproject
     assert (rendered / "tests" / "__init__.py").exists()
     assert "test:" in ci
 

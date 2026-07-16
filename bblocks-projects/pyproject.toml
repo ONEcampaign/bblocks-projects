@@ -21,11 +21,11 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "copier>=9.0.0",
-    "pyyaml>=6.0",
-    "rich>=13.0.0",
-    "tomlkit>=0.14.0",
-    "typer>=0.12.0",
+    "copier>=9.17.0",
+    "pyyaml>=6.0.3",
+    "rich>=15.0.0",
+    "tomlkit>=0.15.0",
+    "typer>=0.26.0",
 ]
 
 [project.urls]
@@ -38,14 +38,14 @@ bblocks-projects = "bblocks.projects.cli:app"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.8.0",
-    "ty>=0.0.33",
-    "mkdocs-material>=9.0.0",
+    "pytest>=9.1.0",
+    "ruff>=0.15.0",
+    "ty>=0.0.59",
+    "mkdocs-material>=9.7.0",
 ]
 
 [build-system]
-requires = ["uv_build>=0.11.8,<0.12"]
+requires = ["uv_build>=0.11.29,<0.12"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]

@@ -180,8 +180,10 @@ _message_after_update: |
 
   1. Check for conflicts in modified files
   2. Review .copier-answers.yml for updated template settings
-  3. Run tests to ensure everything still works{% if project_type == 'package' %}: uv run pytest{% endif %}
-  4. Commit the changes when ready
+  3. Refresh the lockfile and environment: uv sync
+  4. Run tests to ensure everything still works{% if project_type == 'package' %}: uv run pytest{% endif %}
+  5. If .pre-commit-config.yaml changed, reinstall the hooks: uv run pre-commit install
+  6. Commit the changes when ready
 
   To see what changed:
      $ git diff
@@ -190,10 +192,38 @@ _message_after_update: |
   https://copier.readthedocs.io/en/stable/updating/
 
 # Post-generation tasks
+#
+# None of these run on `copier update` — every one is guarded to `copy`
+# only, deliberately, because `copier update` runs `_tasks` *before* it
+# replays the diff that restores local edits (see _apply_update() in
+# copier's _main.py). A task that fails on a second run — and network
+# calls, dependency resolution, and git operations against an
+# already-initialized repo can all fail on a second run — aborts the
+# update mid-flight, after the working tree has already been overwritten
+# with fresh template scaffold but before copier ever reapplies the
+# subproject's real content, silently destroying source and tests. That
+# failure is strictly worse than a task simply not running, so no task
+# runs on update at all; `_message_after_update` above tells the user which
+# of these to run by hand instead.
+#
+# `_copier_operation` is "update" for every nested render `copier update`
+# performs internally, not just the real destination — including the
+# throwaway "old" and "new" template renders it diffs against each other.
+# Copier only makes those throwaway renders into git repos *after* `_tasks`
+# has run, which is a second, independent reason every task here has to be
+# guarded: `uv run pre-commit install`, guarded for the reason above, would
+# otherwise still fail inside those renders once `git init` is skipped
+# there.
 _tasks:
-  - "git init"
-  - "uv venv"
-  - "uv sync"  # Creates/updates uv.lock for reproducible builds
-  - "git add ."  # Includes uv.lock for version control
-  - 'git commit -m "Initial commit from copier template"'
-  - "uv run pre-commit install"  # uv run resolves pre-commit from .venv, no host install needed
+  - command: "git init"
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "uv venv" # fails outright if .venv already exists (update always has one)
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "uv sync" # needs the network and dependency resolution; either can fail
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "git add ." # Includes uv.lock for version control
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: 'git commit -m "Initial commit from copier template"'
+    when: "{{ _copier_operation == 'copy' }}"
+  - command: "uv run pre-commit install" # needs the git repo that only `copy` guarantees
+    when: "{{ _copier_operation == 'copy' }}"

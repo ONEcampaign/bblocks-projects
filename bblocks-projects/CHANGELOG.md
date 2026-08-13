@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-08-13
+
+### Fixed
+
+- **`copier update` could destroy real source and tests.** The template's post-generation `_tasks` (`git init`, `uv venv`, `uv sync`, `git add .`, `git commit`, installing the pre-commit hook) ran unconditionally on both `copier copy` and `copier update`. On update, copier's `_apply_update()` runs those tasks against the _real_ subproject — and does so before it replays the diff that restores local edits, not after. If any task failed on that second run (`uv venv` errors outright when `.venv` already exists; `git commit` fails when a pre-commit hook reformats a file mid-commit; `uv sync` can fail on a network hiccup or a dependency floor the subproject can't satisfy), the failure aborted the update immediately after the working tree had already been overwritten with fresh template scaffold, but before copier ever reapplied the subproject's real content. The result: hand-written source and tests silently replaced with placeholder boilerplate, already staged, with no conflict markers or `.rej` files to signal that anything had gone wrong. Initial `copier copy` was never affected — a failed task there triggers copier's own cleanup of the half-built directory instead.
+
+  Every task in `_tasks` is now guarded to run only on the initial `copy` — including `uv sync`, even though it's the most "idempotent-looking" of the six. The point isn't that each task is individually unsafe to repeat; it's that a task failing mid-update is categorically worse than a task simply not running, so no task runs on update at all, and `_message_after_update` now tells you which of these to run by hand (`uv sync`, `uv run pre-commit install` if the hook config changed, then commit). (Installing the hook has to be guarded for a second, independent reason: `copier update` also runs `_tasks` inside the throwaway template renders it diffs internally, and those only become git repos _after_ `_tasks` runs, so an unguarded `pre-commit install` fails there once `git init` is skipped.)
+
+  **Why not `skip_if_exists` instead (or as well)?** It doesn't address the actual failure mode — the diff/merge itself already preserves hand-written content correctly once nothing aborts it mid-update — and it would permanently stop the template from ever evolving `src/{project_slug}/__init__.py` or `tests/`, which are exactly the files every generated project immediately overwrites with real code. The task guard fixes the actual defect without giving up template evolution of those files.
+
+  **One-time consequence of this fix: your first `copier update` onto 1.1.1 or later will delete `uv.lock`.** `uv.lock` isn't a template file — it only exists because `uv sync` used to create it. Copier's update mechanism renders your project's _previous_ template version into a scratch copy to compute what changed; if that previous version still had `uv sync` unguarded, the scratch copy gets a `uv.lock` and the new (1.1.1+) scratch copy doesn't, and copier's own cleanup step — which recursively deletes anything present in the "old" scratch render but absent from the "new" one, with no way to exempt a path from it — reads that as "the template stopped shipping this file" and removes it from your real project. It's a one-time side effect of the transition, not a recurring one: once a project is fully on 1.1.1+, both renders agree `uv sync` doesn't run, and further updates leave `uv.lock` alone. The fix is exactly `_message_after_update`'s first recommended step: run `uv sync` after updating and it's back.
+
 ## [1.1.0] - 2026-08-13
 
 ### Added
@@ -64,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Previously, `[tool.pytest.ini_options]`, `[tool.coverage.run]`, and
   `[tool.coverage.report]` were rendered for every project type, even
   when pytest itself wasn't installed — which caused `bblocks-projects
-  add pytest` to flag spurious "Conflicts detected" against
+add pytest` to flag spurious "Conflicts detected" against
   byte-identical config. Now those sections render only when pytest is
   actually present.
 - **`doctor` no longer flags pytest as missing for `project`-type repos

@@ -1,7 +1,9 @@
 """Tests for the CLI interface."""
 
+import contextlib
 import re
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -601,17 +603,37 @@ def test_add_bogus_component_yes_exits_one(tmp_path: Path) -> None:
     assert result.exit_code == 1
 
 
-def test_add_unknown_component_escapes_bracketed_name(tmp_path: Path) -> None:
+def test_add_unknown_component_escapes_bracketed_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """`component_name` is a raw CLI argument; a bracket in it must survive
     the "Unknown component" message rather than being read as a style tag.
+
+    `add` enters `rendered_template_for` (which clones the template via
+    copier) before it ever looks up the component name, so reaching the
+    "Unknown component" branch at all — with or without a bracket — requires
+    a `uv.lock` (to clear `validate_for_component`) *and* a stub for
+    `rendered_template_for` (to avoid a real network clone). Without the
+    stub this is network-dependent: it happens to pass on a machine with a
+    warm copier cache and git credentials, and fails in CI with a git clone
+    error, never printing the message this test is meant to check.
     """
     _make_bblocks_project(tmp_path)
     (tmp_path / "uv.lock").touch()
+
+    @contextlib.contextmanager
+    def fake_rendered_template_for(project: object) -> Iterator[Path]:
+        yield tmp_path
+
+    monkeypatch.setattr(
+        "bblocks.projects.installer.rendered_template_for", fake_rendered_template_for
+    )
     result = runner.invoke(
         app, ["add", "bogus[name]", "--yes", "--path", str(tmp_path)]
     )
+    plain = _plain(result.stdout)
+    assert "Unknown component: bogus[name]" in plain
     assert result.exit_code == 1
-    assert "bogus[name]" in _plain(result.stdout)
 
 
 def test_add_partial_success_exits_one(

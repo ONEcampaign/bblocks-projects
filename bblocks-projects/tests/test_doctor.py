@@ -39,6 +39,32 @@ def test_run_checks_short_circuits_on_catastrophic_pyproject(tmp_path: Path) -> 
     assert "scaffolding.pyproject_unparseable" in codes
 
 
+def test_run_checks_degrades_on_unreadable_pyproject(tmp_path: Path) -> None:
+    """A pyproject.toml that exists but can't be opened as a file must
+    degrade to a catastrophic Finding like the malformed-TOML case, not
+    crash run_checks with an unhandled OSError — the sibling check for
+    .copier-answers.yml already gets this right.
+
+    A directory named pyproject.toml is the portable way to force that:
+    Project.pyproject_path.exists() is True for a directory (so this isn't
+    accidentally exercising the missing-file path), and opening it raises
+    an OSError subclass on every platform — IsADirectoryError on POSIX,
+    PermissionError on Windows — unlike chmod(0o000), which Windows
+    doesn't honor at all.
+    """
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.mkdir()
+    (tmp_path / ".copier-answers.yml").write_text(
+        "project_type: package\n", encoding="utf-8"
+    )
+    project = Project(tmp_path)
+    assert project.has_pyproject()  # exists() is True for a directory too
+    findings = run_checks(project, check_updates=False)
+    matching = [f for f in findings if f.code == "scaffolding.pyproject_unreadable"]
+    assert len(matching) == 1
+    assert matching[0].severity == "catastrophic"
+
+
 def test_run_checks_short_circuits_on_catastrophic_answers(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\n', encoding="utf-8"

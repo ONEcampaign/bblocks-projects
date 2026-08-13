@@ -6,7 +6,7 @@ If you've never run it before, walk through [Getting Started](getting-started.md
 
 ## Before you start
 
-- Python 3.11+, `git`, and `uv` on your `PATH`.
+- Python 3.12+, `git`, and `uv` on your `PATH`.
 - (Optional) `gh auth login` so author info gets prefilled from your GitHub profile.
 
 ## Pick a destination

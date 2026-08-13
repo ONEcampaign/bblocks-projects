@@ -65,29 +65,85 @@ If the upstream has newer commits, the Template panel will show:
 
 The check uses `git ls-remote` and times out after 5 seconds. On a network failure it downgrades to an advisory rather than a hard finding.
 
+## Check the family contract
+
+`--family` runs the [bblocks family contract](the-family-contract.md) checks — the twelve conventions that keep `oda_reader`, `readerkit`, `imf-reader`, and the rest of the family consistent. It runs automatically when `.copier-answers.yml` records `preset: family`; pass the flag explicitly for a repo that answered `standalone`, or one that predates the `preset` question and has no answers file at all:
+
+```bash
+uvx bblocks-projects doctor --path /path/to/my-package --family
+```
+
+```
+Doctor report for /path/to/my-package
+
+╭───── Scaffolding ─────╮
+│ ✓ Scaffolding healthy │
+╰───────────────────────╯
+╭───── Drift ─────╮
+│ ✓ Drift healthy │
+╰─────────────────╯
+╭───── Components ─────╮
+│ ✓ Components healthy │
+╰──────────────────────╯
+╭──────────────────────────── Family contract ────────────────────────────╮
+│ ✓  1. uv build backend                                                  │
+│ ✓  2. ruff                                                              │
+│ ✓  3. ty                                                                │
+│ ✓  4. pre-commit                                                        │
+│ ✓  5. Python floor 3.12                                                 │
+│ –  6. readerkit for HTTP and caching                                    │
+│ –  7. Cache redirectable and disableable                                │
+│ ✓  8. No import-time side effects                                       │
+│ ✓  9. No upper-bound pins                                               │
+│ ✓ 10. OIDC publishing                                                   │
+│ ! 11. Branch protection                                                 │
+│    ! branch-protection check skipped: not checked (pass --check-remote) │
+│ ! 12. conda-forge feedstock                                             │
+│    ! feedstock check skipped: not checked (pass --check-remote)         │
+╰─────────────────────────────────────────────────────────────────────────╯
+╭───── Template version ─────╮
+│ ✓ Template version healthy │
+╰────────────────────────────╯
+2 advisories (informational)
+```
+
+Items 6 and 7 render `–` here because this package doesn't do HTTP or caching — not applicable, not a pass. Items 11 and 12 need the network; add `--check-remote` to actually run them instead of reporting the skip advisory:
+
+```bash
+uvx bblocks-projects doctor --path /path/to/my-package --family --check-remote --strict
+```
+
+`--check-remote` calls `gh api` (branch protection) and `api.anaconda.org` (the conda-forge feedstock), 8-second timeout each. Every failure mode — no `gh` on `PATH`, a timeout, a 403 that means "can't tell" rather than "unprotected" — degrades to the same `*_skipped` advisory rather than a false finding.
+
+See [The bblocks family contract](the-family-contract.md) for what each item means, the two named exemptions, and the checks' known false negatives and false positives.
+
 ## What it checks
 
-Three severities, grouped into four sections:
+Four severities, grouped into five sections:
 
-- **Catastrophic** — the project is unreadable (`pyproject.toml` missing or malformed, `.copier-answers.yml` missing, malformed, or not a YAML mapping). Always exits non-zero. Other checks are skipped because they can't run.
-- **Finding** — a drift the maintainer should know about: project type doesn't match the on-disk layout, `project_slug` in `.copier-answers.yml` doesn't match the actual package name, `python_version` in `.copier-answers.yml` disagrees (in either direction) with the lower bound parsed from `requires-python`, a standard component is missing, or the local template is behind upstream.
-- **Advisory** — informational only. Currently used when `--check-updates` couldn't reach the network.
+- **Catastrophic** — the project is unreadable (`pyproject.toml` missing, malformed, or unreadable; `.copier-answers.yml` missing, unreadable, malformed, or not a YAML mapping). Always exits `2`. Other checks are skipped because they can't run.
+- **Finding** — a drift the maintainer should know about: project type doesn't match the on-disk layout, `project_slug` in `.copier-answers.yml` doesn't match the actual package name, `python_version` in `.copier-answers.yml` disagrees (in either direction) with the lower bound parsed from `requires-python`, a standard component is missing, the local template is behind upstream, or (under `--family`) a family-contract item fails outright.
+- **Advisory** — informational only: `--check-updates` or `--check-remote` couldn't reach the network, a family-contract source scan couldn't run or couldn't attribute what it found to a job or module, an import-time call `doctor` can't classify, or an item that's exempted rather than checked (the Python-floor exemption).
+- **Not applicable** (`–`) — family-contract items 6 and 7 render this instead of a pass when the package doesn't fetch or doesn't cache at all. Only appears in the Family contract section, only under `--family`.
+- **Not checked** (`?`) — every family-contract item renders this instead of a pass, a fail, or n/a when a catastrophic finding stops the checks from running before any item can be evaluated.
 
-The four sections in the report:
+The five sections in the report:
 
-| Section | What it covers |
-|---|---|
-| Scaffolding | `pyproject.toml` and `.copier-answers.yml` parseability |
-| Drift | `project_type`, `project_slug`, `python_version` agreement between answers and actual files |
-| Components | Whether each standard component (pre-commit, ruff, ci, pytest, and — for packages — pypi-publish) is installed |
-| Template version | Local `_commit` vs upstream `HEAD` (only when `--check-updates` is passed) |
+| Section          | What it covers                                                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| Scaffolding      | `pyproject.toml` and `.copier-answers.yml` parseability                                                        |
+| Drift            | `project_type`, `project_slug`, `python_version` agreement between answers and actual files                    |
+| Components       | Whether each standard component (pre-commit, ruff, ci, pytest, and — for packages — pypi-publish) is installed |
+| Family contract  | The twelve items in [the family contract](the-family-contract.md), only under `--family`                       |
+| Template version | Local `_commit` vs upstream `HEAD` (only when `--check-updates` is passed)                                     |
 
 ## Use it in CI
 
 Exit codes:
 
 - Default: exit `0` unless something is catastrophic.
-- `--strict`: exit `1` on any *finding* (advisories never affect the exit code).
+- `--strict`: exit `1` on any _finding_ (advisories never affect the exit code).
+- Catastrophic: exit `2`, always — distinct from `--strict`'s `1`, since a project that couldn't be checked at all is a different failure mode from one that was checked and found non-compliant.
 
 A typical CI job:
 
@@ -122,6 +178,15 @@ Either rename `[project].name` in `pyproject.toml` to match `.copier-answers.yml
 
 **`template-version check skipped: TimeoutExpired`**
 Your network couldn't reach the template repo within 5 seconds. This is an advisory, not a finding — `doctor` will still exit cleanly. Re-run on a better connection if you need the check to run.
+
+**`branch-protection check skipped: gh lacks permission to check (HTTP 403)`**
+The `gh` token authenticated on this machine doesn't have admin rights on the repo, so `doctor` can't tell whether `main` is protected — a 403 means "can't tell", not "unprotected". This is an advisory; `--strict` won't fail on it. Use a token with admin access on the repo to get a real answer.
+
+**`branch-protection check skipped: not checked (pass --check-remote)` / `feedstock check skipped: not checked (pass --check-remote)`**
+Expected without `--check-remote` — items 11 and 12 are the only two family-contract checks that touch the network, and `doctor` doesn't make network calls unless you ask it to. Add `--check-remote` to actually run them; see [Check the family contract](#check-the-family-contract).
+
+**`contract.readerkit` finding on a package that doesn't actually fetch**
+The check is a static heuristic (see [the family contract](the-family-contract.md#known-false-negatives-and-false-positives)): `urllib.request` is on the fetch-indicator list because it's a fetch mechanism, but it's also the home of `pathname2url`. A package importing it only to build `file://` URLs gets flagged with nothing to migrate — `import urllib.request` and `from urllib.request import pathname2url` both match, since the check only looks at which module an import statement names, not which symbol it pulls from it. This is a `finding`, so `--strict` fails on it. There's no suppression flag; note the false positive where it comes up (a PR comment, or a line in the repo's own docs) rather than restructuring the import to dodge it.
 
 ## See also
 

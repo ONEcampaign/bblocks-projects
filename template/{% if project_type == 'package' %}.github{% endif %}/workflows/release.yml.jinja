@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@v10.0.0
 
       - name: Cache uv
         uses: actions/cache@v6
@@ -46,7 +46,7 @@ jobs:
       url: https://pypi.org/project/{{ project_slug }}
     steps:
       - name: Install uv
-        uses: astral-sh/setup-uv@v8.3.2
+        uses: astral-sh/setup-uv@v10.0.0
 
       - name: Download build artifacts
         uses: actions/download-artifact@v8

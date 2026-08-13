@@ -34,6 +34,19 @@ project_type:
     "Research (legacy alias for Project — kept for backwards compatibility)": research
   default: project
 
+# Family contract — see docs/the-family-contract.md
+preset:
+  type: str
+  help: >-
+    Which conventions apply? `family` opts into the bblocks family contract:
+    a Python 3.12 floor, readerkit for HTTP and caching, no upper-bound pins,
+    OIDC publishing, branch protection, and a conda-forge feedstock. Enforced
+    by `bblocks-projects doctor --strict`. `standalone` is the ordinary preset.
+  choices:
+    Standalone (ordinary project or package): standalone
+    Family (bblocks family package, enforced by doctor): family
+  default: standalone
+
 include_notebooks:
   type: bool
   help: Include a notebooks/ directory for Jupyter exploration?
@@ -61,12 +74,17 @@ author_email:
 python_version:
   type: str
   help: Minimum Python version
-  default: "3.13"
+  default: "{{ '3.12' if preset == 'family' else '3.13' }}"
   choices:
     - "3.11"
     - "3.12"
     - "3.13"
     - "3.14"
+  validator: >-
+    {%- if preset == 'family' and python_version == '3.11' -%}
+    The family preset requires a Python floor of 3.12 or higher.
+    Choose 3.12 or later, or answer `standalone` to the preset question.
+    {%- endif -%}
 
 # License
 license:

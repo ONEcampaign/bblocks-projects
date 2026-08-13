@@ -12,3 +12,4 @@ nav:
   - Reference: reference.md
   - Explanation:
       - Package vs project: package-vs-project.md
+      - The family contract: the-family-contract.md

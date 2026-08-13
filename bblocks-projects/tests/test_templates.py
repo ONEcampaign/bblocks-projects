@@ -171,3 +171,46 @@ def test_validator_rejects_bad_project_slug(template_src: Path, tmp_path: Path) 
             "package",
             project_slug="bad-slug; rm -rf /",
         )
+
+
+def test_family_preset_renders_and_records_answer(
+    template_src: Path, tmp_path: Path
+) -> None:
+    """`preset=family` with a compliant Python version renders and is recorded."""
+    rendered = _render(
+        template_src,
+        tmp_path / "family",
+        "package",
+        preset="family",
+        python_version="3.12",
+    )
+    answers = (rendered / ".copier-answers.yml").read_text()
+    assert "preset: family" in answers
+
+
+def test_family_preset_rejects_python_below_floor(
+    template_src: Path, tmp_path: Path
+) -> None:
+    """`preset=family` with `python_version=3.11` fails copier validation."""
+    with pytest.raises(ValueError, match="family preset requires a Python floor"):
+        _render(
+            template_src,
+            tmp_path / "family_too_old",
+            "package",
+            preset="family",
+            python_version="3.11",
+        )
+
+
+def test_default_preset_is_standalone_and_allows_python_311(
+    template_src: Path, tmp_path: Path
+) -> None:
+    """No `preset` answer defaults to `standalone` and still accepts Python 3.11."""
+    rendered = _render(
+        template_src,
+        tmp_path / "standalone",
+        "package",
+        python_version="3.11",
+    )
+    answers = (rendered / ".copier-answers.yml").read_text()
+    assert "preset: standalone" in answers

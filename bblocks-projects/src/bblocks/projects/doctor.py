@@ -21,6 +21,7 @@ SECTIONS: tuple[tuple[str, str], ...] = (
     ("scaffolding", "Scaffolding"),
     ("drift", "Drift"),
     ("components", "Components"),
+    ("contract", "Family contract"),
     ("template", "Template version"),
 )
 
@@ -39,25 +40,67 @@ def _template_skipped(message: str) -> Finding:
     return Finding("template.skipped", "advisory", message, None)
 
 
-def run_checks(project: Project, *, check_updates: bool) -> list[Finding]:
+def is_family_project(project: Project, *, force: bool = False) -> bool:
+    """True when the family contract applies to this project.
+
+    True when `.copier-answers.yml` records `preset: family`, or when
+    `force` is set (the CLI's `--family` escape hatch, for family repos
+    that predate the preset question and so have no answers file at all).
+    """
+    return force or project.get_preset() == "family"
+
+
+def run_checks(
+    project: Project,
+    *,
+    check_updates: bool,
+    family: bool = False,
+    check_remote: bool = False,
+) -> list[Finding]:
     """Run all health checks against a bblocks-managed project.
 
     Catastrophic findings short-circuit further checks. The caller is
-    responsible for refusing non-bblocks-managed projects (no
-    `.copier-answers.yml` or `pyproject.toml`) before invoking this
+    responsible for refusing non-bblocks-managed projects (no pyproject.toml,
+    or no `.copier-answers.yml` unless `family` is set) before invoking this
     function — those refusals are not modeled as findings.
+
+    `family` runs the family-contract checks (see `contract.py`) in addition
+    to the usual scaffolding/drift/components/template checks. When
+    `.copier-answers.yml` is absent, the scaffolding/drift/components checks
+    that compare against it are skipped rather than treated as catastrophic;
+    under `family`, a `contract.not_adopted` advisory names the gap.
+    `check_remote` additionally runs the two contract checks that hit the
+    network (branch protection, conda-forge); without it, both degrade to a
+    `*_skipped` advisory.
     """
     findings: list[Finding] = []
     findings += _check_pyproject_parseable(project)
-    findings += _check_copier_answers_parseable(project)
+    answers_present = (project.path / ".copier-answers.yml").exists()
+    if answers_present:
+        findings += _check_copier_answers_parseable(project)
     if any(f.severity == "catastrophic" for f in findings):
         return findings
-    findings += _check_drift_project_type(project)
-    findings += _check_drift_project_slug(project)
-    findings += _check_drift_python_version(project)
-    findings += _check_components(project)
-    if check_updates:
-        findings += _check_template_version(project)
+    if answers_present:
+        findings += _check_drift_project_type(project)
+        findings += _check_drift_project_slug(project)
+        findings += _check_drift_python_version(project)
+        findings += _check_components(project)
+        if check_updates:
+            findings += _check_template_version(project)
+    elif family:
+        findings.append(
+            Finding(
+                "contract.not_adopted",
+                "advisory",
+                "Not generated from the bblocks template (no .copier-answers.yml); "
+                "scaffolding, drift and component checks skipped",
+                "See docs/adopting-an-existing-project.md",
+            )
+        )
+    if family:
+        from bblocks.projects.contract import run_contract_checks  # noqa: PLC0415
+
+        findings += run_contract_checks(project, check_remote=check_remote)
     return findings
 
 
@@ -82,6 +125,19 @@ def _check_pyproject_parseable(project: Project) -> list[Finding]:
                 "catastrophic",
                 f"pyproject.toml is malformed: {e}",
                 "Fix the TOML syntax",
+            )
+        ]
+    except OSError as e:
+        # Same treatment as _check_copier_answers_parseable's read below: a
+        # pyproject.toml that exists but can't be opened (permission denied,
+        # a broken symlink) is exactly as unable to proceed as a malformed
+        # one, not a doctor crash.
+        return [
+            Finding(
+                "scaffolding.pyproject_unreadable",
+                "catastrophic",
+                f"pyproject.toml could not be read: {e}",
+                "Ensure pyproject.toml exists and is readable",
             )
         ]
     return []

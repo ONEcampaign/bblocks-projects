@@ -21,6 +21,7 @@ What happens:
 1. Copier reads `.copier-answers.yml` to find the template URL and the commit you originally rendered from.
 2. It re-runs the template at the new version (default: `main`), feeding it your previous answers so it doesn't re-prompt.
 3. It applies the diff between old-template and new-template to your working tree, merging where it can.
+4. It stops there — no `git init`, no automatic commit, no `uv sync`, no reinstalling the pre-commit hook. Copier runs none of the template's post-generation tasks on update, on purpose (see "What the update will and won't touch" below). You run `uv sync`, `uv run pre-commit install` if the hook config changed, and `git commit` yourself, same as any other working-tree change.
 
 Then review and commit:
 
@@ -59,7 +60,7 @@ uvx bblocks-projects update \
 
 ## Resolve conflicts
 
-When the template changed a file *and* you've changed the same file, Copier writes Git-style conflict markers into the file:
+When the template changed a file _and_ you've changed the same file, Copier writes Git-style conflict markers into the file:
 
 ```
 <<<<<<< before updating
@@ -92,6 +93,8 @@ Touched: anything the template owns. That includes `.github/workflows/`, `.pre-c
 
 Not touched: your source code, your dependency list (`[project.dependencies]`), your data, your git history, your custom CI jobs. Copier's three-way merge is conservative — if you've edited a file, the updater tries to preserve your edits and only flags a conflict when it genuinely can't.
 
+Before 1.1.1, this guarantee had a hole: Copier applies template changes to your real working tree _before_ it replays that merge, and the template's post-generation tasks (`git init`, `uv venv`, `uv sync`, `git add`, `git commit`, installing the pre-commit hook) used to re-run at that point too. If one of them failed — a pre-commit hook reformatting a file during the commit was enough, but a `uv sync` network hiccup or dependency conflict would have done it just as well — the update aborted right there, leaving your source and tests overwritten with template scaffold and no merge ever applied. 1.1.1 stopped every one of those tasks from running on `update`, closing that hole for good: rather than judging each task as "safe enough" to leave running, none of them run, so there's no task left that can abort the update partway through.
+
 ## Verify it worked
 
 ```bash
@@ -112,6 +115,7 @@ The project wasn't created from this template, or someone deleted the file. See 
 
 **`Template version not found`**
 The ref you passed doesn't exist in the template repo. Check available refs with:
+
 ```bash
 git ls-remote --tags https://github.com/ONEcampaign/bblocks-projects
 git ls-remote --heads https://github.com/ONEcampaign/bblocks-projects
@@ -119,9 +123,13 @@ git ls-remote --heads https://github.com/ONEcampaign/bblocks-projects
 
 **Update completes but `uv sync` fails**
 The template may have bumped a dependency lower bound. Delete `uv.lock` and re-sync:
+
 ```bash
 rm uv.lock && uv sync
 ```
+
+**`uv.lock` disappeared after updating to 1.1.1 (or later)**
+Expected, one-time, and harmless: run `uv sync` and it's back. `uv.lock` isn't a template file — it only exists because `uv sync` used to run automatically. Updating a project that was still on an older template version, onto 1.1.1 or later, is the one update where Copier's internal bookkeeping sees `uv.lock` "disappear" from what the template produces and removes it from your project to match. It won't happen again on your next update.
 
 **Pre-commit fails on files you didn't touch**
 The template updated the `ruff` or `ty` config to a stricter rule set. Either fix the issues (`uv run ruff check --fix .`), or revert the relevant section of `pyproject.toml` and open an issue on the template repo if you think the rule shouldn't have shipped.

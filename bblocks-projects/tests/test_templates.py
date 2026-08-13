@@ -5,6 +5,7 @@ from pathlib import Path
 
 import copier
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 assert (REPO_ROOT / "copier.yml").exists(), (
@@ -200,6 +201,47 @@ def test_family_preset_rejects_python_below_floor(
             preset="family",
             python_version="3.11",
         )
+
+
+def test_no_task_runs_on_update(template_src: Path) -> None:
+    """No `_tasks` entry may run on `copier update` — every one must be
+    guarded to the initial `copy`, with none left as a bare (unconditional)
+    string.
+
+    `copier update` runs `_tasks` against the real subproject *before* it
+    replays the diff that restores local edits (see `_apply_update()` in
+    copier's `_main.py`). A task that fails on a second run — `uv venv`
+    errors outright when `.venv` already exists, `git commit` fails when a
+    pre-commit hook reformats a file mid-commit, `uv sync` can fail on a
+    network hiccup or a resolution conflict — aborts the update mid-flight,
+    after the working tree has been overwritten with fresh scaffold but
+    before local edits are restored, silently destroying real source and
+    tests.
+
+    `_copier_operation` is also "update" inside the throwaway "old"/"new"
+    template renders `copier update` diffs internally, and those only
+    become git repos *after* `_tasks` runs — so a task like
+    `uv run pre-commit install` must be guarded too, or it fails there once
+    `git init` is skipped ("are you in a Git repository directory?"), even
+    though it looks idempotent in isolation.
+
+    The upshot: rather than judging each task's own idempotence, no task
+    runs on update at all. See CHANGELOG [1.1.1] and
+    docs/updating-projects.md.
+    """
+    config = yaml.safe_load((template_src / "copier.yml").read_text())
+    tasks = config["_tasks"]
+    assert tasks, "expected _tasks to be non-empty"
+
+    # A task reverted to a bare string loses its guard and runs
+    # unconditionally, including on update.
+    assert all(isinstance(task, dict) for task in tasks), (
+        "every _tasks entry must use the dict form with a copy-only `when:` "
+        "guard; a bare string always runs, including on `copier update`"
+    )
+    assert all(
+        task.get("when") == "{{ _copier_operation == 'copy' }}" for task in tasks
+    ), "every _tasks entry must be guarded to `_copier_operation == 'copy'`"
 
 
 def test_default_preset_is_standalone_and_allows_python_311(

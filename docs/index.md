@@ -19,17 +19,17 @@ Everything else is flags on those four.
 
 - **New here?** Walk through [Getting Started](getting-started.md) — about ten minutes, ending with a generated project and one working analysis function inside it.
 - **Just need to do a thing?**
-    - [Create a project](creating-projects.md)
-    - [Update a project](updating-projects.md)
-    - [Add components to an existing project](adding-components.md)
-    - [Adopt a project that wasn't created from the template](adopting-an-existing-project.md)
-    - [Run the doctor](running-the-doctor.md)
+  - [Create a project](creating-projects.md)
+  - [Update a project](updating-projects.md)
+  - [Add components to an existing project](adding-components.md)
+  - [Adopt a project that wasn't created from the template](adopting-an-existing-project.md)
+  - [Run the doctor](running-the-doctor.md)
 - **Picking between `package` and `project`?** Read [Package vs project](package-vs-project.md).
 - **Looking up a flag or template variable?** [Reference](reference.md).
 
 ## Install
 
-Requires Python 3.11+, `git`, and [`uv`](https://docs.astral.sh/uv/) on `PATH`. The recommended invocation is `uvx bblocks-projects ...`, which downloads the tool on demand and exits — no install step. For other install methods (`uv tool install`, `pipx`, `pip`), see the [package README](https://github.com/ONEcampaign/bblocks-projects/blob/main/bblocks-projects/README.md).
+Requires Python 3.12+, `git`, and [`uv`](https://docs.astral.sh/uv/) on `PATH`. The recommended invocation is `uvx bblocks-projects ...`, which downloads the tool on demand and exits — no install step. For other install methods (`uv tool install`, `pipx`, `pip`), see the [package README](https://github.com/ONEcampaign/bblocks-projects/blob/main/bblocks-projects/README.md).
 
 ---
 

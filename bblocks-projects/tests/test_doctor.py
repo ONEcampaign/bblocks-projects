@@ -39,6 +39,28 @@ def test_run_checks_short_circuits_on_catastrophic_pyproject(tmp_path: Path) -> 
     assert "scaffolding.pyproject_unparseable" in codes
 
 
+def test_run_checks_degrades_on_unreadable_pyproject(tmp_path: Path) -> None:
+    """A pyproject.toml that exists but can't be opened (permission denied)
+    must degrade to a catastrophic Finding like the malformed-TOML case,
+    not crash run_checks with an unhandled OSError — the sibling check for
+    .copier-answers.yml already gets this right."""
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "demo"\n', encoding="utf-8")
+    (tmp_path / ".copier-answers.yml").write_text(
+        "project_type: package\n", encoding="utf-8"
+    )
+    pyproject.chmod(0o000)
+    try:
+        project = Project(tmp_path)
+        findings = run_checks(project, check_updates=False)
+    finally:
+        pyproject.chmod(0o644)
+    assert len(findings) >= 1
+    assert all(f.severity == "catastrophic" for f in findings)
+    codes = [f.code for f in findings]
+    assert "scaffolding.pyproject_unreadable" in codes
+
+
 def test_run_checks_short_circuits_on_catastrophic_answers(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\n', encoding="utf-8"

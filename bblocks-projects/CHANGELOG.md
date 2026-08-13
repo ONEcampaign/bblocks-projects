@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-08-13
+
+### Added
+
+- **`preset` template question.** New `create`/`update` question, `standalone` (default) or `family`. `family` opts a repo into the bblocks family contract — a Python 3.12 floor, `readerkit` for HTTP and caching, no upper-bound pins, OIDC publishing, branch protection, and a conda-forge feedstock — and is recorded in `.copier-answers.yml` so `doctor` can read it without the network. Choosing `family` also changes `python_version`'s default to `3.12` (was `3.13`) and rejects `3.11` at the prompt.
+- **`doctor --family`** — runs the twelve family-contract checks against a project, reported in a new "Family contract" section. Runs automatically when `.copier-answers.yml` records `preset: family`; pass the flag explicitly for a `standalone` repo or one that predates the `preset` question and has no answers file at all. See [the family contract docs](../docs/the-family-contract.md).
+- **`doctor --check-remote`** — also runs the two contract checks that hit the network (branch protection via `gh api`, the conda-forge feedstock via `api.anaconda.org`). Without it, both report a `not checked (pass --check-remote)` advisory instead of a false pass.
+
+### Changed
+
+- **Raised `bblocks-projects`' own Python floor to 3.12** (was 3.11) and dropped the 3.11 classifier. `target-version`, `[tool.ty.environment]`, the CI matrix (now `3.12`–`3.14`), and the publish workflow's Python version all moved with it. No source changes were needed — there were no 3.11-only compatibility shims.
+- **The `doctor` summary line now counts findings and advisories separately.** It previously printed `f"{n} findings"` for `n` findings-plus-advisories combined, so a run with one real finding and ten advisories read "11 findings" — overstating what `--strict` would actually fail on. It now reads `"1 finding, 10 advisories (use --strict to fail)"`, with correct singular/plural on both nouns.
+
 ## [1.0.3] - 2026-07-16
 
 ### Fixed

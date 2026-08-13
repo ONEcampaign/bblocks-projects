@@ -1,6 +1,7 @@
 """Project analysis and detection utilities."""
 
 import re
+import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any, Literal
@@ -134,6 +135,26 @@ class Project:
         match = re.search(r"(\d+)\.(\d+)", requires)
         return f"{match.group(1)}.{match.group(2)}" if match else "3.11"
 
+    def get_requires_python(self) -> str | None:
+        """Get the raw `requires-python` string, or None when unset.
+
+        Unlike `get_python_version()`, this does not default to "3.11" —
+        callers that need to know whether the field is genuinely absent
+        (the family contract's Python-floor check) want the raw value.
+        """
+        requires = self.pyproject_data.get("project", {}).get("requires-python")
+        return requires if isinstance(requires, str) else None
+
+    def get_build_backend(self) -> str | None:
+        """Get `[build-system].build-backend`, or None when unset."""
+        backend = self.pyproject_data.get("build-system", {}).get("build-backend")
+        return backend if isinstance(backend, str) else None
+
+    def get_preset(self) -> str | None:
+        """Get the `preset` answer from `.copier-answers.yml` ("family" or "standalone")."""
+        value = self.copier_answers.get("preset")
+        return value if isinstance(value, str) else None
+
     def has_dependency(self, name: str) -> bool:
         """Check if project has a dependency."""
         deps = self.pyproject_data.get("project", {}).get("dependencies", [])
@@ -169,6 +190,139 @@ class Project:
                 return False
             data = data[part]
         return True
+
+    def iter_runtime_dependencies(self) -> list[str]:
+        """Get every runtime dependency spec.
+
+        `[project].dependencies` plus every list under
+        `[project].optional-dependencies` except `dev` — `dev` is the
+        pre-PEP-735 location for dev tooling (see `has_dev_dependency`),
+        not a runtime extra a consumer resolves against. `[dependency-groups]`
+        is dev-only by construction and is deliberately excluded too.
+        """
+        project_data = self.pyproject_data.get("project", {})
+        deps: list[str] = [
+            d for d in project_data.get("dependencies", []) if isinstance(d, str)
+        ]
+        optional = project_data.get("optional-dependencies", {})
+        if isinstance(optional, dict):
+            for group_name, group in optional.items():
+                if group_name == "dev" or not isinstance(group, list):
+                    continue
+                deps.extend(d for d in group if isinstance(d, str))
+        return deps
+
+    def package_roots(self) -> list[Path]:
+        """Get every genuine package directory under `src/`.
+
+        Walks the tree under `src/` breadth-first — each level sorted by
+        name, `__pycache__` excluded — collecting every directory that
+        has an `__init__.py`. A directory without one is treated as a
+        namespace-package layer and its children are queued for the same
+        search, so a non-package sibling that sorts first (`_vendor/`,
+        `_data/`, an empty `assets/`) gets skipped instead of aborting
+        the whole search. Once a directory IS a package, its children
+        are not queued — a subpackage belongs to its parent, it is not a
+        sibling root to discover separately.
+
+        A flat multi-package `src/` (`src/alpha_pkg/`, `src/zeta_pkg/`)
+        is real: several repos on this machine ship this shape, and
+        every one of those packages is a distinct root a caller like
+        `_source_scan` needs to inspect — a clean `alpha_pkg` must not
+        hide a violation living in `zeta_pkg`.
+
+        A directory that can't be listed (permission error, or it
+        disappears mid-walk) is skipped rather than aborting the whole
+        search, mirroring `read_workflows`. Any packages under it are
+        invisible to this scan — a known gap, not a crash.
+
+        Returns an empty list when there is no `src/` layout, or no
+        package is found anywhere under it.
+        """
+        src = self.path / "src"
+        if not src.is_dir():
+            return []
+        roots: list[Path] = []
+        queue: list[Path] = [src]
+        while queue:
+            current = queue.pop(0)
+            try:
+                entries = list(current.iterdir())
+            except OSError:
+                continue
+            subdirs = sorted(
+                (
+                    d
+                    for d in entries
+                    if d.is_dir()
+                    and not d.name.startswith(".")
+                    and d.name != "__pycache__"
+                ),
+                key=lambda d: d.name,
+            )
+            for d in subdirs:
+                if (d / "__init__.py").is_file():
+                    roots.append(d)
+                else:
+                    queue.append(d)
+        return roots
+
+    def package_root(self) -> Path | None:
+        """Get the first genuine package directory under `src/`.
+
+        A thin convenience wrapper over `package_roots()` for callers that
+        only care whether a package exists at all. When `src/` holds more
+        than one genuine package (a flat multi-package layout), this
+        returns the first one found in `package_roots()`'s breadth-first,
+        alphabetical order: deterministic, but arbitrary among equals.
+        Callers that need every package under `src/` — `_source_scan`'s
+        `scan_package` and `public_surface` among them — use
+        `package_roots()` directly instead.
+
+        Returns None when there is no `src/` layout, or no package is
+        found anywhere under it.
+        """
+        roots = self.package_roots()
+        return roots[0] if roots else None
+
+    def read_workflows(self) -> dict[str, str]:
+        """Get every GitHub Actions workflow as raw text, filename -> text.
+
+        Globs `.github/workflows/*.yml` and `*.yaml`. Unreadable files are
+        skipped rather than raising.
+        """
+        workflows_dir = self.path / ".github" / "workflows"
+        if not workflows_dir.is_dir():
+            return {}
+        result: dict[str, str] = {}
+        for pattern in ("*.yml", "*.yaml"):
+            for file in sorted(workflows_dir.glob(pattern)):
+                try:
+                    result[file.name] = file.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+        return result
+
+    def get_git_remote_slug(self) -> str | None:
+        """Get `owner/repo` from the `origin` remote, or None when unavailable."""
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(self.path), "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        if result.returncode != 0:
+            return None
+        match = re.search(
+            r"github\.com[:/ ]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", result.stdout.strip()
+        )
+        if not match:
+            return None
+        return f"{match.group(1)}/{match.group(2)}"
 
     def get_github_username(self) -> str | None:
         """Read `github_username` from the project's .copier-answers.yml."""

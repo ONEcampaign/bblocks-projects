@@ -32,7 +32,7 @@ donor-analysis/
 ## What you'll need
 
 - About 15 minutes.
-- Python 3.11+, [`uv`](https://docs.astral.sh/uv/), and `git` on your `PATH`. Run `uv --version && git --version` to confirm.
+- Python 3.12+, [`uv`](https://docs.astral.sh/uv/), and `git` on your `PATH`. Run `uv --version && git --version` to confirm.
 - A terminal in a directory where you can create a new folder.
 
 If you'd like author info prefilled, also run `gh auth login` first. It's optional — `uvx` will ask for your name and email if it can't detect them.

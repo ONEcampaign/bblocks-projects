@@ -14,7 +14,7 @@ Every Python project starts with the same decisions and boilerplate: which linte
 
 ## Install
 
-Requires Python 3.11+, `git`, and [`uv`](https://docs.astral.sh/uv/) on `PATH`.
+Requires Python 3.12+, `git`, and [`uv`](https://docs.astral.sh/uv/) on `PATH`.
 
 ```bash
 # One-off, no install (recommended)

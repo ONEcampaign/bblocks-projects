@@ -82,7 +82,7 @@ When changing the template:
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.12+
 - [`uv`](https://docs.astral.sh/uv/) and `git` on `PATH`
 - [Copier](https://copier.readthedocs.io/) 9.0+ if invoking Copier directly
 

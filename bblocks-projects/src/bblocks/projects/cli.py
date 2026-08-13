@@ -10,6 +10,7 @@ import typer
 from copier import run_copy, run_update
 from copier.errors import CopierError
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 
 if TYPE_CHECKING:
@@ -76,7 +77,7 @@ def _announce_template_source(cli_template: str | None, resolved_url: str) -> No
         if os.environ.get(TEMPLATE_ENV_VAR) == resolved_url
         else "config file"
     )
-    console.print(f"[dim]Using template from {source}: {resolved_url}[/dim]")
+    console.print(f"[dim]Using template from {source}: {escape(resolved_url)}[/dim]")
 
 
 def get_github_user_info() -> dict[str, str]:
@@ -208,7 +209,9 @@ def create(
     elif destination is None:
         # Ask user interactively
         console.print("\n[bold]Where would you like to create the project?[/bold]\n")
-        console.print(f"  [cyan]1.[/cyan] Current directory ({Path.cwd().name}/)")
+        console.print(
+            f"  [cyan]1.[/cyan] Current directory ({escape(Path.cwd().name)}/)"
+        )
         console.print("  [cyan]2.[/cyan] New subdirectory")
         choice = typer.prompt("\nChoice", default="1")
 
@@ -223,7 +226,8 @@ def create(
 
     if destination.exists() and destination.is_file():
         console.print(
-            f"[bold red]Error:[/bold red] '{destination}' is a file, not a directory."
+            f"[bold red]Error:[/bold red] '{escape(str(destination))}' is a file, "
+            "not a directory."
         )
         raise typer.Exit(code=1)
 
@@ -233,8 +237,8 @@ def create(
         non_hidden = [f for f in destination.iterdir() if not f.name.startswith(".")]
         if non_hidden:
             console.print(
-                f"[bold yellow]Warning:[/bold yellow] Directory '{destination}' "
-                "is not empty."
+                f"[bold yellow]Warning:[/bold yellow] Directory "
+                f"'{escape(str(destination))}' is not empty."
             )
             if not typer.confirm("Continue anyway? Files may be overwritten."):
                 raise typer.Exit(code=0)
@@ -243,7 +247,9 @@ def create(
     _announce_template_source(template, resolved_url)
 
     console.print(TEMPLATE_DESCRIPTION)
-    console.print(f"\n[bold green]Creating project at:[/bold green] {destination}")
+    console.print(
+        f"\n[bold green]Creating project at:[/bold green] {escape(str(destination))}"
+    )
 
     # Try to get defaults from GitHub CLI
     github_info: dict[str, str] = {}
@@ -251,7 +257,7 @@ def create(
         github_info = get_github_user_info()
         if github_info:
             gh_user = github_info.get("github_username", "unknown")
-            console.print(f"\n[dim]Detected GitHub user: {gh_user}[/dim]")
+            console.print(f"\n[dim]Detected GitHub user: {escape(gh_user)}[/dim]")
 
     # Prepare data overrides (GitHub info as base, then explicit overrides)
     data_dict: dict[str, str] = {}
@@ -268,8 +274,8 @@ def create(
         for item in data:
             if "=" not in item:
                 console.print(
-                    f"[bold red]Error:[/bold red] Invalid data format: {item}. "
-                    "Use KEY=VALUE format."
+                    f"[bold red]Error:[/bold red] Invalid data format: "
+                    f"{escape(item)}. Use KEY=VALUE format."
                 )
                 raise typer.Exit(code=1)
             key, value = item.split("=", 1)
@@ -288,17 +294,17 @@ def create(
         )
         console.print(
             f"\n[bold green]✓[/bold green] Project created successfully at "
-            f"{destination}"
+            f"{escape(str(destination))}"
         )
         console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  cd {destination}")
+        console.print(f"  cd {escape(str(destination))}")
         console.print("  # Review and edit README.md")
         console.print("  # Start coding!")
     except CopierError as e:
-        console.print(f"[bold red]Error creating project:[/bold red] {e}")
+        console.print(f"[bold red]Error creating project:[/bold red] {escape(str(e))}")
         raise typer.Exit(code=1) from e
     except Exception as e:
-        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        console.print(f"[bold red]Unexpected error:[/bold red] {escape(str(e))}")
         raise typer.Exit(code=1) from e
 
 
@@ -358,7 +364,8 @@ def update(
     """
     destination = destination or Path.cwd()
     console.print(
-        f"[bold cyan]Updating project at:[/bold cyan] {destination.absolute()}"
+        f"[bold cyan]Updating project at:[/bold cyan] "
+        f"{escape(str(destination.absolute()))}"
     )
 
     _preflight_required_tools("update")
@@ -386,8 +393,8 @@ def update(
         for item in data:
             if "=" not in item:
                 console.print(
-                    f"[bold red]Error:[/bold red] Invalid data format: {item}. "
-                    "Use KEY=VALUE format."
+                    f"[bold red]Error:[/bold red] Invalid data format: "
+                    f"{escape(item)}. Use KEY=VALUE format."
                 )
                 raise typer.Exit(code=1)
             key, value = item.split("=", 1)
@@ -410,10 +417,10 @@ def update(
         console.print("  uv run pytest  # Run tests")
         console.print("  git commit -m 'Update from template'")
     except CopierError as e:
-        console.print(f"[bold red]Error updating project:[/bold red] {e}")
+        console.print(f"[bold red]Error updating project:[/bold red] {escape(str(e))}")
         raise typer.Exit(code=1) from e
     except Exception as e:
-        console.print(f"[bold red]Unexpected error:[/bold red] {e}")
+        console.print(f"[bold red]Unexpected error:[/bold red] {escape(str(e))}")
         raise typer.Exit(code=1) from e
 
 
@@ -489,11 +496,14 @@ def add(
         console.print("\n[bold]Available components:[/bold]\n")
         for comp in list_components():
             badge = (
-                f" [dim]({comp.requires_project_type} only)[/dim]"
+                f" [dim]({escape(comp.requires_project_type)} only)[/dim]"
                 if comp.requires_project_type
                 else ""
             )
-            console.print(f"  • [cyan]{comp.name}[/cyan] - {comp.description}{badge}")
+            console.print(
+                f"  • [cyan]{escape(comp.name)}[/cyan] - "
+                f"{escape(comp.description)}{badge}"
+            )
         console.print()
         return
 
@@ -517,8 +527,8 @@ def add(
 
     # Show project info
     console.print("\n[bold]Project Analysis:[/bold]")
-    console.print(f"  Path: {project.path}")
-    console.print(f"  Name: {project.get_project_name() or 'Unknown'}")
+    console.print(f"  Path: {escape(str(project.path))}")
+    console.print(f"  Name: {escape(project.get_project_name() or 'Unknown')}")
     console.print(f"  Type: {project.detect_type()}")
     console.print("  Uses uv: Yes")
 
@@ -531,7 +541,8 @@ def add(
 
             if component is None:
                 console.print(
-                    f"\n[bold red]Unknown component:[/bold red] {component_name}"
+                    f"\n[bold red]Unknown component:[/bold red] "
+                    f"{escape(component_name)}"
                 )
                 console.print(
                     "\nAvailable components: pre-commit, ruff, ci, pytest, pypi-publish"
@@ -550,7 +561,8 @@ def add(
                     success_count += 1
             except Exception as e:
                 console.print(
-                    f"\n[bold red]Error installing {component_name}:[/bold red] {e}"
+                    f"\n[bold red]Error installing {escape(component_name)}:"
+                    f"[/bold red] {escape(str(e))}"
                 )
                 continue
 
@@ -563,43 +575,145 @@ def add(
         raise typer.Exit(code=1)
 
 
-def _render_doctor_report(project: "Project", findings: "list[Finding]") -> None:
+def _render_contract_panel(
+    findings: "list[Finding]", *, na_keys: frozenset[str], title: str
+) -> None:
+    """Render the family-contract section.
+
+    Unlike the generic per-section loop, this enumerates all twelve
+    `FAMILY_CONTRACT` items explicitly rather than deriving structure from
+    `findings` alone — two things can't be derived from an empty list of
+    findings for an item: whether it passed, or whether it doesn't apply
+    (`na_keys`, item 6/7/`requires_project_type` mismatches — see
+    `contract.na_item_keys`). Findings whose code belongs to no
+    `ContractItem` (`contract.not_adopted`, and any future code someone
+    forgets to register) print in a trailing bucket instead of vanishing.
+    """
+    from bblocks.projects.contract import FAMILY_CONTRACT  # noqa: PLC0415
+
+    claimed_codes = {code for item in FAMILY_CONTRACT for code in item.codes}
+    lines: list[str] = []
+    for item in FAMILY_CONTRACT:
+        if item.key in na_keys:
+            lines.append(f"[dim]–[/dim] {item.number:>2}. {item.title}")  # noqa: RUF001
+            continue
+        item_findings = [f for f in findings if f.code in item.codes]
+        if not item_findings:
+            lines.append(f"[green]✓[/green] {item.number:>2}. {item.title}")
+            continue
+        glyph = (
+            "[red]✗[/red]"
+            if any(f.severity == "finding" for f in item_findings)
+            else "[yellow]![/yellow]"
+        )
+        lines.append(f"{glyph} {item.number:>2}. {item.title}")
+        for finding in item_findings:
+            sub_glyph = (
+                "[red]✗[/red]"
+                if finding.severity == "finding"
+                else "[yellow]![/yellow]"
+            )
+            lines.append(f"   {sub_glyph} {escape(finding.message)}")
+            if finding.remediation:
+                lines.append(f"[dim]     → {escape(finding.remediation)}[/dim]")
+
+    unclaimed = [
+        f
+        for f in findings
+        if f.code.startswith("contract.") and f.code not in claimed_codes
+    ]
+    if unclaimed:
+        lines.append("")
+        for finding in unclaimed:
+            glyph = (
+                "[red]✗[/red]"
+                if finding.severity == "finding"
+                else "[yellow]![/yellow]"
+            )
+            lines.append(f"{glyph} {escape(finding.message)}")
+            if finding.remediation:
+                lines.append(f"[dim]   → {escape(finding.remediation)}[/dim]")
+
+    console.print(Panel("\n".join(lines), title=f"[bold]{title}[/bold]", expand=False))
+
+
+# Section prefixes whose checks compare against .copier-answers.yml and are
+# skipped outright when it's absent (doctor.run_checks, the `elif family:`
+# arm) — see `_ADOPTION_GAP_SECTIONS` note in `_render_doctor_report`.
+_ADOPTION_GAP_SECTIONS = frozenset({"scaffolding", "drift", "components"})
+
+
+def _render_doctor_report(
+    project: "Project",
+    findings: "list[Finding]",
+    *,
+    family: bool = False,
+    na_keys: frozenset[str] = frozenset(),
+    answers_present: bool = True,
+) -> None:
     from bblocks.projects.doctor import SECTIONS  # noqa: PLC0415
 
-    console.print(f"\n[bold cyan]Doctor report for[/bold cyan] {project.path}\n")
+    # Same pass-versus-not-applicable conflation `_render_contract_panel`
+    # exists to fix, one level up: when .copier-answers.yml is absent,
+    # `run_checks` never runs the drift/component checks (or the
+    # answers-comparing half of scaffolding) at all, so these sections'
+    # empty finding lists mean "didn't run", not "passed". The only other
+    # signal is `contract.not_adopted`, an advisory buried in the contract
+    # panel further down — not something a reader scanning three green
+    # ticks at the top of the report will see.
+    adoption_gap = family and not answers_present
+
+    console.print(
+        f"\n[bold cyan]Doctor report for[/bold cyan] {escape(str(project.path))}\n"
+    )
     for code_prefix, section_name in SECTIONS:
+        if code_prefix == "contract":
+            # Not a generic loop: needs the na/pass distinction and the
+            # unclaimed-codes bucket. Printed only under --family; standalone
+            # projects never see it.
+            if family:
+                _render_contract_panel(findings, na_keys=na_keys, title=section_name)
+            continue
         section_findings = [f for f in findings if f.code.startswith(f"{code_prefix}.")]
-        if not section_findings:
+        if (
+            not section_findings
+            and adoption_gap
+            and code_prefix in _ADOPTION_GAP_SECTIONS
+        ):
+            body = "[dim]–  not checked: no .copier-answers.yml[/dim]"  # noqa: RUF001
+        elif not section_findings:
             body = f"[green]✓[/green] {section_name} healthy"
         else:
             lines = []
             for finding in section_findings:
                 if finding.severity == "advisory":
-                    line = f"[yellow]![/yellow] {finding.message}"
+                    line = f"[yellow]![/yellow] {escape(finding.message)}"
                 else:
-                    line = f"[red]✗[/red] {finding.message}"
+                    line = f"[red]✗[/red] {escape(finding.message)}"
                 lines.append(line)
                 if finding.remediation:
-                    lines.append(f"[dim]   → {finding.remediation}[/dim]")
+                    lines.append(f"[dim]   → {escape(finding.remediation)}[/dim]")
             body = "\n".join(lines)
         console.print(Panel(body, title=f"[bold]{section_name}[/bold]", expand=False))
 
     has_catastrophic = any(f.severity == "catastrophic" for f in findings)
-    has_finding = any(f.severity == "finding" for f in findings)
-    non_catastrophic = [f for f in findings if f.severity != "catastrophic"]
+    num_findings = sum(1 for f in findings if f.severity == "finding")
+    num_advisories = sum(1 for f in findings if f.severity == "advisory")
 
     if has_catastrophic:
         console.print("[bold red]Catastrophic: cannot continue[/bold red]")
     elif not findings:
         console.print("[bold green]Healthy[/bold green]")
-    elif not has_finding:
-        console.print(
-            f"[yellow]{len(non_catastrophic)} advisories[/yellow] (informational)"
-        )
+    elif not num_findings:
+        noun = "advisory" if num_advisories == 1 else "advisories"
+        console.print(f"[yellow]{num_advisories} {noun}[/yellow] (informational)")
     else:
-        console.print(
-            f"[yellow]{len(non_catastrophic)} findings[/yellow] (use --strict to fail)"
-        )
+        finding_noun = "finding" if num_findings == 1 else "findings"
+        summary = f"{num_findings} {finding_noun}"
+        if num_advisories:
+            advisory_noun = "advisory" if num_advisories == 1 else "advisories"
+            summary += f", {num_advisories} {advisory_noun}"
+        console.print(f"[yellow]{summary}[/yellow] (use --strict to fail)")
 
 
 @app.command()
@@ -621,6 +735,23 @@ def doctor(
         "--check-updates",
         help="Compare local _commit against template HEAD (network)",
     ),
+    family: bool = typer.Option(
+        False,
+        "--family",
+        help=(
+            "Run the bblocks family contract checks, even without a "
+            "preset: family answer (also implied by preset: family)"
+        ),
+    ),
+    check_remote: bool = typer.Option(
+        False,
+        "--check-remote",
+        help=(
+            "Also run the two family-contract checks that hit the network "
+            "(branch protection, conda-forge feedstock). No effect without "
+            "--family or preset: family"
+        ),
+    ),
 ) -> None:
     """Run health checks on a bblocks-managed project.
 
@@ -637,8 +768,16 @@ def doctor(
 
         # Include template freshness check (requires network)
         bblocks-projects doctor --check-updates
+
+        # Run the family contract checks (also runs automatically when
+        # .copier-answers.yml records preset: family)
+        bblocks-projects doctor --family
+
+        # Also check branch protection and the conda-forge feedstock
+        bblocks-projects doctor --family --check-remote
     """
-    from bblocks.projects.doctor import run_checks  # noqa: PLC0415
+    from bblocks.projects.contract import na_item_keys  # noqa: PLC0415
+    from bblocks.projects.doctor import is_family_project, run_checks  # noqa: PLC0415
     from bblocks.projects.project import Project  # noqa: PLC0415
 
     path = path or Path.cwd()
@@ -649,15 +788,32 @@ def doctor(
             "This doesn't appear to be a Python project."
         )
         raise typer.Exit(code=1)
-    if not (abs_path / ".copier-answers.yml").exists():
+    answers_present = (abs_path / ".copier-answers.yml").exists()
+    # Missing .copier-answers.yml is only fatal without --family: --family is
+    # the escape hatch for family repos that predate the preset question and
+    # so were never generated from the template at all.
+    if not answers_present and not family:
         console.print(
             "[bold red]Error:[/bold red] This project doesn't appear to be "
             "bblocks-managed (no .copier-answers.yml)."
         )
         raise typer.Exit(code=1)
     project = Project(abs_path)
-    findings = run_checks(project, check_updates=check_updates)
-    _render_doctor_report(project, findings)
+    is_family = is_family_project(project, force=family)
+    findings = run_checks(
+        project,
+        check_updates=check_updates,
+        family=is_family,
+        check_remote=check_remote,
+    )
+    na_keys = na_item_keys(project) if is_family else frozenset()
+    _render_doctor_report(
+        project,
+        findings,
+        family=is_family,
+        na_keys=na_keys,
+        answers_present=answers_present,
+    )
     if any(f.severity == "catastrophic" for f in findings):
         raise typer.Exit(code=1)
     # --strict flips on severity "finding" only; "advisory" never affects exit code.

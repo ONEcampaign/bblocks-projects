@@ -193,23 +193,28 @@ def test_branch_protection_falls_through_to_ruleset_when_classic_does_not_gate(
                 "required_linear_history": {"enabled": True},
             }
             return _FakeCompleted(returncode=0, stdout=json.dumps(body))
-        rulesets = [
-            {
-                "id": 1,
-                "name": "Protect main",
-                "target": "branch",
-                "enforcement": "active",
-                "conditions": {
-                    "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
-                },
-                "rules": [{"type": "pull_request"}],
-            }
-        ]
-        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        if args[-1].endswith("/rulesets"):
+            rulesets = [
+                {
+                    "id": 1,
+                    "name": "Protect main",
+                    "target": "branch",
+                    "enforcement": "active",
+                    "conditions": {
+                        "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
+                    },
+                    "rules": [{"type": "pull_request"}],
+                }
+            ]
+            return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        # `repos/<slug>` — resolves `~DEFAULT_BRANCH` to `refs/heads/main`.
+        return _FakeCompleted(
+            returncode=0, stdout=json.dumps({"default_branch": "main"})
+        )
 
     monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
     assert _check_branch_protection(Project(p), check_remote=True) == []
-    assert len(calls) == 2  # protection, then rulesets
+    assert len(calls) == 3  # protection, rulesets, then the default-branch lookup
 
 
 def test_branch_protection_flags_when_classic_and_rulesets_both_fail_to_gate(
@@ -278,28 +283,33 @@ def test_branch_protection_passes_on_ruleset(
     def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
         if args[-1].endswith("/protection"):
             return _not_protected_completed()
-        # Real `gh api repos/<slug>/rulesets` shape: `enforcement` and
-        # `rules` sit alongside `target`/`conditions`, and both must be
-        # inspected for this ruleset to count as protection.
-        rulesets = [
-            {
-                "id": 1,
-                "name": "Protect main",
-                "target": "branch",
-                "enforcement": "active",
-                "conditions": {
-                    "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
-                },
-                "rules": [
-                    {"type": "deletion"},
-                    {
-                        "type": "pull_request",
-                        "parameters": {"required_approving_review_count": 1},
+        if args[-1].endswith("/rulesets"):
+            # Real `gh api repos/<slug>/rulesets` shape: `enforcement` and
+            # `rules` sit alongside `target`/`conditions`, and both must be
+            # inspected for this ruleset to count as protection.
+            rulesets = [
+                {
+                    "id": 1,
+                    "name": "Protect main",
+                    "target": "branch",
+                    "enforcement": "active",
+                    "conditions": {
+                        "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
                     },
-                ],
-            }
-        ]
-        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+                    "rules": [
+                        {"type": "deletion"},
+                        {
+                            "type": "pull_request",
+                            "parameters": {"required_approving_review_count": 1},
+                        },
+                    ],
+                }
+            ]
+            return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        # `repos/<slug>` — resolves `~DEFAULT_BRANCH` to `refs/heads/main`.
+        return _FakeCompleted(
+            returncode=0, stdout=json.dumps({"default_branch": "main"})
+        )
 
     monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
     assert _check_branch_protection(Project(p), check_remote=True) == []
@@ -391,15 +401,22 @@ def test_branch_protection_flags_when_ruleset_has_no_gating_rule(
     def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
         if args[-1].endswith("/protection"):
             return _not_protected_completed()
-        rulesets = [
-            {
-                "target": "branch",
-                "enforcement": "active",
-                "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"]}},
-                "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
-            }
-        ]
-        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        if args[-1].endswith("/rulesets"):
+            rulesets = [
+                {
+                    "target": "branch",
+                    "enforcement": "active",
+                    "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"]}},
+                    "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+                }
+            ]
+            return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        # `repos/<slug>` — resolves `~DEFAULT_BRANCH` to `refs/heads/main`, so
+        # the finding below is actually reached for the "no gating rule"
+        # reason this test is about, not because of an unresolved alias.
+        return _FakeCompleted(
+            returncode=0, stdout=json.dumps({"default_branch": "main"})
+        )
 
     monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
     findings = _check_branch_protection(Project(p), check_remote=True)
@@ -442,6 +459,285 @@ def test_branch_protection_flags_when_ruleset_excludes_main(
     monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
     findings = _check_branch_protection(Project(p), check_remote=True)
     assert _codes(findings) == ["contract.branch_protection"]
+
+
+def test_branch_protection_flags_when_ruleset_wildcard_excludes_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`exclude: ["refs/heads/ma*"]` is an fnmatch pattern, not a literal —
+    it excludes `main` exactly like `exclude: ["refs/heads/main"]` would.
+
+    Regression guard: a check that compares `exclude` entries against a
+    fixed set of literal strings, instead of matching them as GitHub
+    patterns, misses this and counts the ruleset as covering `main`.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        if args[-1].endswith("/rulesets"):
+            rulesets = [
+                {
+                    "target": "branch",
+                    "enforcement": "active",
+                    "conditions": {
+                        "ref_name": {
+                            "include": ["~DEFAULT_BRANCH"],
+                            "exclude": ["refs/heads/ma*"],
+                        }
+                    },
+                    "rules": [{"type": "pull_request"}],
+                }
+            ]
+            return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        # `repos/<slug>` — resolves `~DEFAULT_BRANCH` to `refs/heads/main`.
+        return _FakeCompleted(
+            returncode=0, stdout=json.dumps({"default_branch": "main"})
+        )
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    findings = _check_branch_protection(Project(p), check_remote=True)
+    assert _codes(findings) == ["contract.branch_protection"]
+
+
+def test_branch_protection_passes_on_ruleset_with_all_meta_include(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`~ALL` ("includes all branches") covers `main` exactly like
+    `~DEFAULT_BRANCH` or a literal ref does. It isn't in a fixed alias
+    set of three literal strings, so a literal-comparison check misses it
+    and calls `main` unprotected even though this ruleset gates it.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        rulesets = [
+            {
+                "target": "branch",
+                "enforcement": "active",
+                "conditions": {"ref_name": {"include": ["~ALL"], "exclude": []}},
+                "rules": [{"type": "pull_request"}],
+            }
+        ]
+        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    assert _check_branch_protection(Project(p), check_remote=True) == []
+
+
+def test_branch_protection_flags_when_ruleset_all_meta_excludes_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`exclude: ["~ALL"]` excludes every branch, `main` included — the
+    same blind spot as the wildcard-exclude case above, for the other
+    meta-value GitHub supports.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        rulesets = [
+            {
+                "target": "branch",
+                "enforcement": "active",
+                "conditions": {
+                    "ref_name": {"include": ["refs/heads/main"], "exclude": ["~ALL"]}
+                },
+                "rules": [{"type": "pull_request"}],
+            }
+        ]
+        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    findings = _check_branch_protection(Project(p), check_remote=True)
+    assert _codes(findings) == ["contract.branch_protection"]
+
+
+def test_branch_protection_passes_on_ruleset_with_wildcard_include(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`include: ["refs/heads/*"]` is a pattern that matches every
+    top-level branch, `main` included. It isn't a literal alias either, so
+    a literal-comparison check misses it too, in the opposite direction
+    from the exclude cases above: it calls a genuinely-covered `main`
+    unprotected.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        rulesets = [
+            {
+                "target": "branch",
+                "enforcement": "active",
+                "conditions": {
+                    "ref_name": {"include": ["refs/heads/*"], "exclude": []}
+                },
+                "rules": [{"type": "pull_request"}],
+            }
+        ]
+        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    assert _check_branch_protection(Project(p), check_remote=True) == []
+
+
+def test_branch_protection_flags_when_wildcard_include_does_not_cover_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`include: ["refs/heads/release/*"]` covers release branches, not
+    `main` — sharing the `refs/heads/` prefix must not be enough for a
+    match. This isn't a regression guard for pattern-vs-literal matching:
+    a check comparing `include` against fixed literal strings would also
+    fail to count this ruleset as covering `main`, just for the wrong
+    reason (it never recognises patterns at all). It exists to guard the
+    pattern matcher's own precision — that a shared prefix isn't mistaken
+    for a full segment match — in the direction opposite the wildcard
+    cases above.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        rulesets = [
+            {
+                "target": "branch",
+                "enforcement": "active",
+                "conditions": {
+                    "ref_name": {"include": ["refs/heads/release/*"], "exclude": []}
+                },
+                "rules": [{"type": "pull_request"}],
+            }
+        ]
+        return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    findings = _check_branch_protection(Project(p), check_remote=True)
+    assert _codes(findings) == ["contract.branch_protection"]
+
+
+def test_branch_protection_flags_when_default_branch_is_not_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`~DEFAULT_BRANCH` only covers `main` when the repository's actual
+    default branch *is* `main`. A repo whose default branch is `develop`
+    can carry a ruleset that reads `~DEFAULT_BRANCH` and protects
+    `develop` while leaving `main` completely open.
+
+    Regression guard: treating `~DEFAULT_BRANCH` as an unconditional
+    synonym for `main`, without checking what the repository's default
+    branch actually is, would certify this repo as protected.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        if args[-1].endswith("/rulesets"):
+            rulesets = [
+                {
+                    "target": "branch",
+                    "enforcement": "active",
+                    "conditions": {
+                        "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
+                    },
+                    "rules": [{"type": "pull_request"}],
+                }
+            ]
+            return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        # `repos/<slug>` — this repo's actual default branch is `develop`.
+        return _FakeCompleted(
+            returncode=0, stdout=json.dumps({"default_branch": "develop"})
+        )
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    findings = _check_branch_protection(Project(p), check_remote=True)
+    assert _codes(findings) == ["contract.branch_protection"]
+
+
+def test_branch_protection_skipped_when_default_branch_lookup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When `~DEFAULT_BRANCH` needs resolving but the `repos/<slug>` lookup
+    fails, and no other ruleset already covers `main`, the check must not
+    assert "main is not protected" — that would turn a lookup failure into
+    a false accusation, exactly what `_branch_protection_skipped` exists to
+    avoid for every other `gh api` failure mode this item handles (a 403,
+    a timeout, a missing `gh`). It degrades to the same advisory instead,
+    with a reason naming why. `--strict` must not fail on an advisory.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        if args[-1].endswith("/protection"):
+            return _not_protected_completed()
+        if args[-1].endswith("/rulesets"):
+            rulesets = [
+                {
+                    "target": "branch",
+                    "enforcement": "active",
+                    "conditions": {
+                        "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
+                    },
+                    "rules": [{"type": "pull_request"}],
+                }
+            ]
+            return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        return _FakeCompleted(returncode=1, stderr="gh: connection reset")
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    findings = _check_branch_protection(Project(p), check_remote=True)
+    assert _codes(findings) == ["contract.branch_protection_skipped"]
+    assert findings[0].severity == "advisory"
+    assert "connection reset" in findings[0].message
+
+
+def test_branch_protection_default_branch_lookup_is_called_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three rulesets all read `~DEFAULT_BRANCH` — the `repos/<slug>` lookup
+    must still run at most once, its result (success or failure) memoized
+    for every pattern in every ruleset that asks for it, not repeated
+    per-ruleset or per-pattern.
+    """
+    p = make_family_project(tmp_path)
+    monkeypatch.setattr(Project, "get_git_remote_slug", lambda self: "ONEcampaign/demo")
+    repo_lookup_calls: list[str] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> _FakeCompleted:
+        path = args[-1]
+        if path.endswith("/protection"):
+            return _not_protected_completed()
+        if path.endswith("/rulesets"):
+            ruleset = {
+                "target": "branch",
+                "enforcement": "active",
+                "conditions": {
+                    "ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}
+                },
+                "rules": [{"type": "pull_request"}],
+            }
+            return _FakeCompleted(returncode=0, stdout=json.dumps([ruleset] * 3))
+        repo_lookup_calls.append(path)
+        return _FakeCompleted(returncode=1, stderr="gh: connection reset")
+
+    monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)
+    findings = _check_branch_protection(Project(p), check_remote=True)
+    assert _codes(findings) == ["contract.branch_protection_skipped"]
+    assert len(repo_lookup_calls) == 1
 
 
 def test_branch_protection_passes_on_required_status_checks_rule(

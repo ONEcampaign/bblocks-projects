@@ -576,7 +576,11 @@ def add(
 
 
 def _render_contract_panel(
-    findings: "list[Finding]", *, na_keys: frozenset[str], title: str
+    findings: "list[Finding]",
+    *,
+    na_keys: frozenset[str],
+    title: str,
+    checked: bool = True,
 ) -> None:
     """Render the family-contract section.
 
@@ -588,8 +592,33 @@ def _render_contract_panel(
     `contract.na_item_keys`). Findings whose code belongs to no
     `ContractItem` (`contract.not_adopted`, and any future code someone
     forgets to register) print in a trailing bucket instead of vanishing.
+
+    `checked=False` is a third case neither `na_keys` nor an empty finding
+    list can express: a catastrophic finding (unparseable/unreadable
+    pyproject.toml) stopped `run_checks` before the contract checks — and
+    before `contract.na_item_keys` — ever ran, so every item is genuinely
+    unknown rather than passing or n/a. Reusing the n/a glyph for that
+    would silently reintroduce the exact pass/n-a conflation this function
+    exists to avoid, so it gets its own glyph and a reason line, echoing the
+    "not checked: <reason>" phrasing `_render_doctor_report` already uses
+    for the no-`.copier-answers.yml` adoption gap.
     """
     from bblocks.projects.contract import FAMILY_CONTRACT  # noqa: PLC0415
+
+    if not checked:
+        reason = next(
+            (f.message for f in findings if f.severity == "catastrophic"),
+            "project could not be read",
+        )
+        lines = [
+            f"[dim]?[/dim] {item.number:>2}. {item.title}" for item in FAMILY_CONTRACT
+        ]
+        lines.append("")
+        lines.append(f"[dim]not checked: {escape(reason)}[/dim]")
+        console.print(
+            Panel("\n".join(lines), title=f"[bold]{title}[/bold]", expand=False)
+        )
+        return
 
     claimed_codes = {code for item in FAMILY_CONTRACT for code in item.codes}
     lines: list[str] = []
@@ -662,6 +691,11 @@ def _render_doctor_report(
     # panel further down — not something a reader scanning three green
     # ticks at the top of the report will see.
     adoption_gap = family and not answers_present
+    # A catastrophic finding (unparseable/unreadable pyproject.toml) stops
+    # `run_checks` before the contract checks run at all, so the caller
+    # never computed `na_keys` either — see `_render_contract_panel`'s
+    # `checked` param.
+    has_catastrophic = any(f.severity == "catastrophic" for f in findings)
 
     console.print(
         f"\n[bold cyan]Doctor report for[/bold cyan] {escape(str(project.path))}\n"
@@ -672,7 +706,12 @@ def _render_doctor_report(
             # unclaimed-codes bucket. Printed only under --family; standalone
             # projects never see it.
             if family:
-                _render_contract_panel(findings, na_keys=na_keys, title=section_name)
+                _render_contract_panel(
+                    findings,
+                    na_keys=na_keys,
+                    title=section_name,
+                    checked=not has_catastrophic,
+                )
             continue
         section_findings = [f for f in findings if f.code.startswith(f"{code_prefix}.")]
         if (
@@ -696,7 +735,6 @@ def _render_doctor_report(
             body = "\n".join(lines)
         console.print(Panel(body, title=f"[bold]{section_name}[/bold]", expand=False))
 
-    has_catastrophic = any(f.severity == "catastrophic" for f in findings)
     num_findings = sum(1 for f in findings if f.severity == "finding")
     num_advisories = sum(1 for f in findings if f.severity == "advisory")
 
@@ -775,6 +813,10 @@ def doctor(
 
         # Also check branch protection and the conda-forge feedstock
         bblocks-projects doctor --family --check-remote
+
+    Exit codes: 0 healthy (or non-strict findings/advisories), 1 a --strict
+    finding, 2 catastrophic (e.g. pyproject.toml doesn't parse) — the project
+    couldn't be checked at all, as distinct from checked-and-non-compliant.
     """
     from bblocks.projects.contract import na_item_keys  # noqa: PLC0415
     from bblocks.projects.doctor import is_family_project, run_checks  # noqa: PLC0415
@@ -806,7 +848,16 @@ def doctor(
         family=is_family,
         check_remote=check_remote,
     )
-    na_keys = na_item_keys(project) if is_family else frozenset()
+    has_catastrophic = any(f.severity == "catastrophic" for f in findings)
+    # na_item_keys reaches project.detect_type()/get_project_name(), which
+    # re-read pyproject_data themselves — Project doesn't cache a parse
+    # failure, so calling this after run_checks already reported one
+    # catastrophic re-raises the very error run_checks degraded gracefully
+    # from. Skip it; _render_doctor_report renders every contract item as
+    # not-checked instead of n/a when there's nothing to compute na_keys from.
+    na_keys = (
+        na_item_keys(project) if is_family and not has_catastrophic else frozenset()
+    )
     _render_doctor_report(
         project,
         findings,
@@ -814,8 +865,11 @@ def doctor(
         na_keys=na_keys,
         answers_present=answers_present,
     )
-    if any(f.severity == "catastrophic" for f in findings):
-        raise typer.Exit(code=1)
+    if has_catastrophic:
+        # A distinct code from the --strict exit below: a reader of the exit
+        # code alone shouldn't confuse "couldn't even check" with "checked,
+        # and it doesn't comply".
+        raise typer.Exit(code=2)
     # --strict flips on severity "finding" only; "advisory" never affects exit code.
     if strict and any(f.severity == "finding" for f in findings):
         raise typer.Exit(code=1)

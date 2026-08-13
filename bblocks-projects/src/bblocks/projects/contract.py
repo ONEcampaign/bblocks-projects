@@ -15,9 +15,11 @@ No check reaches into `project.pyproject_data` directly — every check goes
 through a `Project` accessor, so the parsing stays in one place.
 """
 
+import fnmatch
 import json
 import re
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
@@ -213,7 +215,7 @@ def _scan_gap_reason(
 
 
 _UV_BUILD_REMEDIATION = (
-    'Set build-backend = "uv_build" and requires = ["uv_build>=0.11.29,<0.12"] '
+    'Set build-backend = "uv_build" and requires = ["uv_build>=0.12.3,<0.13"] '
     "in [build-system]"
 )
 
@@ -846,14 +848,134 @@ def _gh_output(result: subprocess.CompletedProcess[str]) -> str:
 # leniency (any protection at all counts): either half of that promise is
 # enough, not both.
 _MERGE_GATING_RULE_TYPES = frozenset({"pull_request", "required_status_checks"})
-# Every ref-name shape GitHub rulesets use for "main": the default-branch
-# alias, and the two forms a repo owner might type literally.
-_MAIN_REF_ALIASES = ("~DEFAULT_BRANCH", "refs/heads/main", "main")
+# The full ref GitHub compares `ref_name` patterns against — see
+# `_ref_glob_matches` for why the comparison is against this, not `"main"`.
+_MAIN_REF = "refs/heads/main"
 
 
-def _ruleset_covers_main(entry: object) -> bool:
-    """A branch ruleset entry that actively protects `main` (or the default
-    branch alias) by gating merges into it.
+def _ref_glob_matches(ref: str, pattern: str) -> bool:
+    """Whether a single (non-meta-value) `ref_name` pattern matches `ref`.
+
+    Per GitHub's REST reference for repository rulesets
+    (https://docs.github.com/en/rest/repos/rules) `include`/`exclude`
+    entries are "ref names or patterns", and the ruleset-targeting guide
+    (https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository)
+    spells out the syntax: fnmatch, matched against the *full* ref
+    (`refs/heads/main`, not the short branch name — its own examples use
+    `refs/heads/main`/`refs/heads/dev*`), with Ruby's `File::FNM_PATHNAME`
+    flag in effect so a bare `*` does not cross a `/` (`qa/*` matches
+    `qa/foo` but not `qa/foo/bar`) while `**` matches across any number of
+    segments, including zero (`qa/**/*` matches `qa/foo/bar/baz`).
+
+    A pattern is split on `/` and matched segment by segment: since each
+    resulting piece can never itself contain a `/`, handing it to
+    `fnmatch.fnmatchcase` (case-sensitive — branch names are) for a plain
+    `*`/`?`/`[...]` match already gets the "doesn't cross a boundary"
+    behaviour for free, without hand-translating fnmatch's syntax.
+    """
+    return _ref_segments_match(ref.split("/"), pattern.split("/"))
+
+
+def _ref_segments_match(ref_segments: list[str], pattern_segments: list[str]) -> bool:
+    if not pattern_segments:
+        return not ref_segments
+    head, *rest = pattern_segments
+    if head == "**":
+        # Zero segments consumed, or one consumed and `**` tried again —
+        # together that covers "any number, including zero".
+        return _ref_segments_match(ref_segments, rest) or (
+            bool(ref_segments)
+            and _ref_segments_match(ref_segments[1:], pattern_segments)
+        )
+    if not ref_segments:
+        return False
+    return fnmatch.fnmatchcase(ref_segments[0], head) and _ref_segments_match(
+        ref_segments[1:], rest
+    )
+
+
+# A ternary match result: `True`/`False` are definitive, and a `Finding`
+# (always a `_branch_protection_skipped` advisory) stands in for "cannot be
+# determined" — carrying its own reason, so it can be returned to the user
+# unchanged instead of collapsing to a `bool` and losing why. Matching
+# `~DEFAULT_BRANCH` is the only thing that can produce this: everything
+# else in a `ref_name` condition is decided from the ruleset body alone,
+# with no network call that can fail.
+_RefMatch = bool | Finding
+
+
+def _kleene_and(a: _RefMatch, b: _RefMatch) -> _RefMatch:
+    """Three-valued AND: `False` dominates (still definitive even if the
+    other side is unknown), otherwise an unknown side makes the result
+    unknown too.
+    """
+    if a is False or b is False:
+        return False
+    if isinstance(a, Finding):
+        return a
+    if isinstance(b, Finding):
+        return b
+    return True
+
+
+def _kleene_not(x: _RefMatch) -> _RefMatch:
+    return x if isinstance(x, Finding) else not x
+
+
+def _ref_condition_matches(
+    patterns: object,
+    ref: str,
+    resolve_default_branch_ref: Callable[[], str | Finding],
+) -> _RefMatch:
+    """Whether any entry in a ruleset's `include`/`exclude` list matches `ref`.
+
+    Two meta-values take priority over pattern matching (documented at
+    https://docs.github.com/en/rest/repos/rules alongside `ref_name`):
+    `~ALL` ("includes all branches") always matches, and `~DEFAULT_BRANCH`
+    ("includes the default branch") matches only when `ref` actually *is*
+    the repository's default branch — resolved lazily via
+    `resolve_default_branch_ref`, not assumed to be `main`. A repo whose
+    default branch is e.g. `develop` can carry a ruleset that reads
+    `~DEFAULT_BRANCH` and protects `develop` while leaving `main`
+    completely open; treating the alias as a `main` synonym unconditionally
+    would certify that repo as protected when it isn't.
+
+    When `~DEFAULT_BRANCH` is present and the resolver can't tell (its
+    `gh api` call failed), this list can't be evaluated with certainty
+    *unless* some other entry already settled it: an explicit match found
+    first still returns `True` outright (an unresolved alias elsewhere in
+    the list is irrelevant once something else has already matched), and
+    only "nothing matched, but `~DEFAULT_BRANCH` might have" returns the
+    resolver's Finding instead of `False`.
+    """
+    if not isinstance(patterns, list):
+        return False
+    unresolved: Finding | None = None
+    for pattern in patterns:
+        if not isinstance(pattern, str):
+            continue
+        if pattern == "~ALL":
+            return True
+        if pattern == "~DEFAULT_BRANCH":
+            resolved = resolve_default_branch_ref()
+            if isinstance(resolved, Finding):
+                unresolved = resolved
+                continue
+            if resolved == ref:
+                return True
+            continue
+        if _ref_glob_matches(ref, pattern):
+            return True
+    return unresolved if unresolved is not None else False
+
+
+def _ruleset_covers_main(
+    entry: object,
+    *,
+    resolve_default_branch_ref: Callable[[], str | Finding],
+) -> _RefMatch:
+    """A branch ruleset entry that actively protects `main` by gating merges
+    into it — or a `Finding` when that can't be determined.
 
     Four things must all hold:
 
@@ -862,18 +984,26 @@ def _ruleset_covers_main(entry: object) -> bool:
       (dry-run: findings are recorded but nothing is blocked) and
       `"disabled"`. Both enforce nothing, so a ruleset in either state is
       not protection.
-    - `conditions.ref_name.include` names `main` (or its alias) — and
+    - `conditions.ref_name.include` matches `refs/heads/main` — and
       `conditions.ref_name.exclude` does not. A ruleset can `include`
-      `~DEFAULT_BRANCH` for a broad "protect every default-ish branch"
-      intent and then carve `main` back out with `exclude`; GitHub applies
-      `exclude` after `include`, so a ref listed in both is not covered.
+      `~DEFAULT_BRANCH` (or a broad pattern like `refs/heads/*`) for a
+      "protect every default-ish branch" intent and then carve `main` back
+      out with `exclude` (`refs/heads/ma*`, `~ALL`, ...); GitHub applies
+      `exclude` after `include`, so a ref matched by both is not covered.
       Reading `include` alone would count that ruleset as protecting a
-      branch it explicitly protects nothing on.
+      branch it explicitly protects nothing on. Both lists are patterns,
+      not literals — see `_ref_glob_matches` and `_ref_condition_matches`
+      for the matching semantics and their source.
     - `rules` contains something that actually gates a merge (a
       `pull_request` requirement or required status checks) — a ruleset
       that only restricts e.g. tag deletion still matches `target` and
       `conditions` but guarantees none of what this item's remediation
       promises.
+
+    A `Finding` return (from `_ref_condition_matches` needing
+    `~DEFAULT_BRANCH` and not getting it) is not "does not cover main" —
+    it must not be flattened to `False` by a caller, or a `gh api` lookup
+    failure turns into a false "main is not protected" verdict.
     """
     if not isinstance(entry, dict) or entry.get("target") != "branch":
         return False
@@ -883,14 +1013,15 @@ def _ruleset_covers_main(entry: object) -> bool:
     ref_name = conditions.get("ref_name") if isinstance(conditions, dict) else None
     included = ref_name.get("include") if isinstance(ref_name, dict) else None
     excluded = ref_name.get("exclude") if isinstance(ref_name, dict) else None
-    included_main = isinstance(included, list) and any(
-        ref in _MAIN_REF_ALIASES for ref in included
+    included_main = _ref_condition_matches(
+        included, _MAIN_REF, resolve_default_branch_ref
     )
-    excluded_main = isinstance(excluded, list) and any(
-        ref in _MAIN_REF_ALIASES for ref in excluded
+    excluded_main = _ref_condition_matches(
+        excluded, _MAIN_REF, resolve_default_branch_ref
     )
-    if not included_main or excluded_main:
-        return False
+    covered = _kleene_and(included_main, _kleene_not(excluded_main))
+    if covered is not True:
+        return covered
     rules = entry.get("rules")
     if not isinstance(rules, list):
         return False
@@ -985,24 +1116,93 @@ def _branch_protected_directly(slug: str) -> list[Finding] | None:
     return [_branch_protection_skipped(_gh_error_reason(result))]
 
 
-def _branch_protected_by_ruleset(slug: str) -> list[Finding]:
-    result = _run_gh_api_or_skip(f"repos/{slug}/rulesets")
+def _default_branch_ref(slug: str) -> str | Finding:
+    """`refs/heads/<default branch>` for `slug` via `gh api repos/<slug>`, or
+    a skip Finding explaining why it couldn't be determined — reusing
+    `_run_gh_api_or_skip`/`_gh_error_reason` gets the same reasons
+    (`gh` missing, a timeout, a 403) as every other `gh api` call in this
+    module, not a second ad hoc set.
+
+    `~DEFAULT_BRANCH` in a `ref_name` condition only means "covers main"
+    when the repository's actual default branch *is* main; guessing that
+    when the lookup fails would risk the exact over-permissive match this
+    module exists to avoid. Callers must not, however, collapse the
+    returned `Finding` to "not main" and report a `contract.branch_protection`
+    finding on its strength — a lookup failure is "could not tell", the
+    same as a 403 on the other `gh api` calls this item makes, and must
+    degrade to an advisory rather than assert the branch is unprotected.
+    """
+    result = _run_gh_api_or_skip(f"repos/{slug}")
     if isinstance(result, Finding):
-        return [result]
+        return result
     if result.returncode != 0:
-        return [_branch_protection_skipped(_gh_error_reason(result))]
+        return _branch_protection_skipped(_gh_error_reason(result))
+    try:
+        body = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return _branch_protection_skipped("gh api repo output was not valid JSON")
+    branch = body.get("default_branch") if isinstance(body, dict) else None
+    if isinstance(branch, str) and branch:
+        return f"refs/heads/{branch}"
+    return _branch_protection_skipped("gh api repo output had no default_branch")
+
+
+def _parsed_rulesets(
+    result: subprocess.CompletedProcess[str],
+) -> list[object] | Finding:
+    """The parsed body of a `gh api repos/<slug>/rulesets` response, or a
+    skip Finding when it isn't the shape expected — split out of
+    `_branch_protected_by_ruleset` to keep that function's branch count down.
+    """
+    if result.returncode != 0:
+        return _branch_protection_skipped(_gh_error_reason(result))
     try:
         parsed = json.loads(result.stdout)
     except json.JSONDecodeError:
-        return [_branch_protection_skipped("gh api rulesets output was not valid JSON")]
+        return _branch_protection_skipped("gh api rulesets output was not valid JSON")
     if not isinstance(parsed, list):
         # An error object or a paginated envelope, not a rulesets array —
         # "not the shape we expected" is "could not tell", same as every
         # other unexpected shape in these two network checks. It is not
         # evidence the branch is unprotected.
-        return [_branch_protection_skipped("gh api rulesets output was not a list")]
-    if any(_ruleset_covers_main(entry) for entry in parsed):
+        return _branch_protection_skipped("gh api rulesets output was not a list")
+    return parsed
+
+
+def _branch_protected_by_ruleset(slug: str) -> list[Finding]:
+    result = _run_gh_api_or_skip(f"repos/{slug}/rulesets")
+    if isinstance(result, Finding):
+        return [result]
+    parsed = _parsed_rulesets(result)
+    if isinstance(parsed, Finding):
+        return [parsed]
+
+    # Resolved at most once, and only if some ruleset's `~DEFAULT_BRANCH`
+    # actually needs it (`_ruleset_covers_main` calls this lazily) — most
+    # rulesets spell `main` out literally or use `~ALL`, and repos with no
+    # covering ruleset at all shouldn't pay for an API call they won't use.
+    # `cache` memoizes the failure just as much as success: one `gh api`
+    # call no matter how many rulesets or patterns ask for it.
+    resolve_default_branch_ref = cache(lambda: _default_branch_ref(slug))
+
+    results = [
+        _ruleset_covers_main(
+            entry, resolve_default_branch_ref=resolve_default_branch_ref
+        )
+        for entry in parsed
+    ]
+    if any(result is True for result in results):
         return []
+    # A ruleset whose coverage hinges on an unresolved `~DEFAULT_BRANCH`
+    # means the whole check "could not tell", not "main is unprotected" —
+    # even though every ruleset we *could* fully evaluate came back
+    # not-covering. Report why rather than asserting a finding we don't
+    # actually have evidence for.
+    unresolved = next(
+        (result for result in results if isinstance(result, Finding)), None
+    )
+    if unresolved is not None:
+        return [unresolved]
     return [
         Finding(
             "contract.branch_protection",

@@ -350,7 +350,17 @@ def _first_party_candidates(
     if imp.level > 0:
         base = _relative_base(current_dotted, is_package, imp.level)
         if imp.module:
-            return [f"{base}.{imp.module}" if base else imp.module]
+            resolved = f"{base}.{imp.module}" if base else imp.module
+            # Mirror the absolute branch below: `from .sub import dangerous`
+            # queues both `base.sub` (the module itself) and
+            # `base.sub.dangerous` (in case `dangerous` is itself a
+            # submodule, not an attribute defined inside `sub`). Python
+            # resolves `from package import name` by importing
+            # `package.name` as a submodule whenever one exists on disk,
+            # executing it in full — so a bare "queue the module" misses
+            # exactly the case (`from .sub import dangerous_submodule`)
+            # this item exists to catch.
+            return [resolved] + [f"{resolved}.{a.name}" for a in imp.names]
         return [f"{base}.{a.name}" if base else a.name for a in imp.names]
     if imp.module and (
         imp.module == root_prefix or imp.module.startswith(root_prefix + ".")

@@ -3,7 +3,7 @@
 import contextlib
 import re
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -382,6 +382,70 @@ class _FakeConnResponse:
 
     def __exit__(self, *exc_info: object) -> bool:
         return False
+
+
+# A directory named pyproject.toml, not chmod(0o000): opening it raises an
+# OSError subclass on every platform (IsADirectoryError on POSIX,
+# PermissionError on Windows), unlike chmod, which Windows doesn't honor.
+# Same trick as test_doctor.py's test_run_checks_degrades_on_unreadable_pyproject.
+def _write_malformed_pyproject(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("not valid toml [[[", encoding="utf-8")
+
+
+def _write_unreadable_pyproject(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").mkdir()
+
+
+@pytest.mark.parametrize(
+    "write_pyproject", [_write_malformed_pyproject, _write_unreadable_pyproject]
+)
+def test_doctor_family_flag_catastrophic_pyproject_reports_cleanly(
+    tmp_path: Path, write_pyproject: Callable[[Path], None]
+) -> None:
+    """`na_item_keys` re-reads `pyproject_data`, which doesn't cache a parse
+    failure, so calling it after `run_checks` already returned a
+    catastrophic finding would re-raise the same error as an unhandled
+    traceback instead of the clean report a catastrophic finding is meant
+    to produce. Must hold under the `--family` escape hatch..."""
+    write_pyproject(tmp_path)
+    (tmp_path / ".copier-answers.yml").write_text(
+        "project_type: package\n", encoding="utf-8"
+    )
+    result = runner.invoke(app, ["doctor", "--path", str(tmp_path), "--family"])
+    # A crash raises TOMLDecodeError/OSError, not SystemExit(2) — distinguish
+    # "doctor exited cleanly with the catastrophic code" from "doctor blew up".
+    assert isinstance(result.exception, SystemExit), f"crashed: {result.exception!r}"
+    assert result.exit_code == 2
+    plain = _plain(result.stdout)
+    assert "Catastrophic: cannot continue" in plain
+    assert "Family contract" in plain
+    assert "not checked: pyproject.toml" in plain
+    # Every one of the twelve items renders as unknown, not n/a or a pass.
+    assert "12. conda-forge feedstock" in plain
+    assert "✓" not in plain.split("Family contract")[1].split("Template version")[0]
+
+
+@pytest.mark.parametrize(
+    "write_pyproject", [_write_malformed_pyproject, _write_unreadable_pyproject]
+)
+def test_doctor_preset_family_catastrophic_pyproject_reports_cleanly(
+    tmp_path: Path, write_pyproject: Callable[[Path], None]
+) -> None:
+    """...and under automatic activation via `preset: family`, with no
+    `--family` flag."""
+    write_pyproject(tmp_path)
+    (tmp_path / ".copier-answers.yml").write_text("preset: family\n", encoding="utf-8")
+    result = runner.invoke(app, ["doctor", "--path", str(tmp_path)])
+    # A crash raises TOMLDecodeError/OSError, not SystemExit(2) — distinguish
+    # "doctor exited cleanly with the catastrophic code" from "doctor blew up".
+    assert isinstance(result.exception, SystemExit), f"crashed: {result.exception!r}"
+    assert result.exit_code == 2
+    plain = _plain(result.stdout)
+    assert "Catastrophic: cannot continue" in plain
+    assert "Family contract" in plain
+    assert "not checked: pyproject.toml" in plain
+    assert "12. conda-forge feedstock" in plain
+    assert "✓" not in plain.split("Family contract")[1].split("Template version")[0]
 
 
 def test_render_contract_panel_buckets_unclaimed_codes() -> None:

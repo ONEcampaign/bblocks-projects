@@ -69,7 +69,7 @@ A module that fails to parse is `contract.import_unreadable` (`advisory`), never
 
 ### Item 9: no upper-bound pins
 
-No runtime dependency (`[project].dependencies` or any `[project.optional-dependencies]` list except `dev`) may cap an external library with `<`, `<=`, `~=`, or `==`. `!=` is not a cap. `[build-system].requires`, `[dependency-groups]`, and `[project.optional-dependencies.dev]` are not scanned — the template's own `uv_build<0.12` pin and dev-tool caps aren't dependencies a consumer resolves against, and `dev` is excluded here for the same reason `Project.has_dev_dependency` already treats it as the pre-PEP-735 home for dev tooling.
+No runtime dependency (`[project].dependencies` or any `[project.optional-dependencies]` list except `dev`) may cap an external library with `<`, `<=`, `~=`, or `==`. `!=` is not a cap. `[build-system].requires`, `[dependency-groups]`, and `[project.optional-dependencies.dev]` are not scanned — the template's own `uv_build<0.13` pin and dev-tool caps aren't dependencies a consumer resolves against, and `dev` is excluded here for the same reason `Project.has_dev_dependency` already treats it as the pre-PEP-735 home for dev tooling.
 
 One finding per capped dependency, naming the exact spec and a relaxed replacement. This item is absolute: there is no exemption for a family sibling or for a dependency still on a `0.x` version. `readerkit>=0.1.0,<0.2` in a runtime dependency list is flagged the same as any other capped external dependency.
 

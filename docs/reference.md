@@ -98,7 +98,7 @@ Requires `pyproject.toml` at the project root. Also requires `.copier-answers.ym
 - **`--family`** — run the [family contract](the-family-contract.md) checks, even without a `preset: family` answer (also implied automatically when `.copier-answers.yml` records `preset: family`).
 - **`--check-remote`** — also run the two family-contract checks that hit the network (branch protection via `gh api`, the conda-forge feedstock via `api.anaconda.org`; 8s timeout each). No effect without `--family` or `preset: family`.
 
-**Exit codes** — `0` on a healthy project. `1` on any catastrophic finding, or — with `--strict` — any finding.
+**Exit codes** — `0` on a healthy project (or, without `--strict`, one with findings/advisories but nothing catastrophic). `1` with `--strict` when any finding is present. `2` on a catastrophic finding — the project couldn't be checked at all, distinct from checked-and-non-compliant.
 
 ## Template variables
 
@@ -166,11 +166,13 @@ From `src/bblocks/projects/doctor.py`. Used by the report renderer and the `--st
 
 | Severity       | Meaning                                                                                                                                                                                                                                                                             | Affects exit code              |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `catastrophic` | Project is unreadable (missing, malformed, or unreadable `pyproject.toml` / `.copier-answers.yml`). Other checks are skipped.                                                                                                                                                       | always exits `1`               |
+| `catastrophic` | Project is unreadable (missing, malformed, or unreadable `pyproject.toml` / `.copier-answers.yml`). Other checks are skipped.                                                                                                                                                       | always exits `2`               |
 | `finding`      | Drift from the standards, or (under `--family`) a family-contract item failing outright.                                                                                                                                                                                            | exits `1` only with `--strict` |
 | `advisory`     | Informational. Used when a network-dependent check (`--check-updates`, `--check-remote`) couldn't reach the network, when a family-contract source scan couldn't run or couldn't attribute what it found to a job or module (items 6, 7, 8, 10), or for the item-5 floor exemption. | never                          |
 
 `–` (not applicable) isn't a severity — it's the family-contract renderer's third glyph, printed for items 6 and 7 when the package doesn't fetch or doesn't cache at all. When the source scan can't establish that either way — no package found under `src/`, or a module it needed to read failed to parse — the item reports a `*_skipped` advisory instead of guessing at the `–`. See [The family contract](#the-family-contract) below.
+
+`?` (not checked) is a fourth glyph, printed for every item when a catastrophic finding stops the contract checks from running at all — the project couldn't be read, so there's nothing to report as passing, failing, or n/a.
 
 Each finding carries a `code` (e.g., `scaffolding.pyproject_missing`, `drift.project_type_mismatch`, `components.missing`, `template.stale`, `contract.readerkit`). The first `.`-separated segment matches one of the five report sections: `scaffolding`, `drift`, `components`, `contract`, `template`.
 

@@ -121,10 +121,11 @@ See [The bblocks family contract](the-family-contract.md) for what each item mea
 
 Four severities, grouped into five sections:
 
-- **Catastrophic** — the project is unreadable (`pyproject.toml` missing, malformed, or unreadable; `.copier-answers.yml` missing, unreadable, malformed, or not a YAML mapping). Always exits non-zero. Other checks are skipped because they can't run.
+- **Catastrophic** — the project is unreadable (`pyproject.toml` missing, malformed, or unreadable; `.copier-answers.yml` missing, unreadable, malformed, or not a YAML mapping). Always exits `2`. Other checks are skipped because they can't run.
 - **Finding** — a drift the maintainer should know about: project type doesn't match the on-disk layout, `project_slug` in `.copier-answers.yml` doesn't match the actual package name, `python_version` in `.copier-answers.yml` disagrees (in either direction) with the lower bound parsed from `requires-python`, a standard component is missing, the local template is behind upstream, or (under `--family`) a family-contract item fails outright.
 - **Advisory** — informational only: `--check-updates` or `--check-remote` couldn't reach the network, a family-contract source scan couldn't run or couldn't attribute what it found to a job or module, an import-time call `doctor` can't classify, or an item that's exempted rather than checked (the Python-floor exemption).
 - **Not applicable** (`–`) — family-contract items 6 and 7 render this instead of a pass when the package doesn't fetch or doesn't cache at all. Only appears in the Family contract section, only under `--family`.
+- **Not checked** (`?`) — every family-contract item renders this instead of a pass, a fail, or n/a when a catastrophic finding stops the checks from running before any item can be evaluated.
 
 The five sections in the report:
 
@@ -142,6 +143,7 @@ Exit codes:
 
 - Default: exit `0` unless something is catastrophic.
 - `--strict`: exit `1` on any _finding_ (advisories never affect the exit code).
+- Catastrophic: exit `2`, always — distinct from `--strict`'s `1`, since a project that couldn't be checked at all is a different failure mode from one that was checked and found non-compliant.
 
 A typical CI job:
 

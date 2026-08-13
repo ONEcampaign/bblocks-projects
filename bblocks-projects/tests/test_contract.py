@@ -236,7 +236,7 @@ def test_dependency_cap_ignores_not_equals(tmp_path: Path) -> None:
 def test_dependency_cap_ignores_build_system(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "demo"\ndependencies = []\n\n'
-        '[build-system]\nrequires = ["uv_build>=0.11.29,<0.12"]\nbuild-backend = "uv_build"\n',
+        '[build-system]\nrequires = ["uv_build>=0.12.3,<0.13"]\nbuild-backend = "uv_build"\n',
         encoding="utf-8",
     )
     assert _check_dependency_cap(Project(tmp_path)) == []
@@ -635,6 +635,11 @@ def test_family_project_fixture_passes_every_contract_item(
                 }
             ]
             return _FakeCompleted(returncode=0, stdout=json.dumps(rulesets))
+        if path == "repos/ONEcampaign/demo":
+            # Resolves the ruleset's `~DEFAULT_BRANCH` to `refs/heads/main`.
+            return _FakeCompleted(
+                returncode=0, stdout=json.dumps({"default_branch": "main"})
+            )
         raise AssertionError(f"unexpected gh api call: {path}")
 
     monkeypatch.setattr("bblocks.projects.contract.subprocess.run", fake_run)

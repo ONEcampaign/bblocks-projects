@@ -1029,6 +1029,121 @@ def test_import_opaque_still_flags_atexit_register(tmp_path: Path) -> None:
     assert "contract.import_opaque" in _codes(findings)
 
 
+# --- import graph: relative from-imports queue the imported submodule ----------
+
+
+def test_import_io_flags_relative_from_import_submodule(tmp_path: Path) -> None:
+    """`from .sub import dangerous` must queue `demo.sub.dangerous` itself,
+    not just `demo.sub` — Python imports `dangerous` as a submodule (running
+    it in full) whenever one exists on disk at that name, rather than
+    looking it up as an attribute of `sub`. Queuing only `demo.sub` would
+    read as clean, leaving the import-time HTTP session and file open
+    inside `dangerous.py` outside the scanned graph entirely."""
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        dependencies=("requests>=2.32",),
+        package_modules={
+            "__init__.py": "from .sub import dangerous\n",
+            "sub/__init__.py": "",
+            "sub/dangerous.py": (
+                "import requests\n\nsession = requests.Session()\nf = open('x.txt')\n"
+            ),
+        },
+    )
+    findings = _check_import_time(Project(p))
+    io_findings = [f for f in findings if f.code == "contract.import_io"]
+    assert len(io_findings) == 2
+    assert all("dangerous.py" in f.message for f in io_findings)
+
+
+def test_import_io_flags_multi_level_relative_from_import_submodule(
+    tmp_path: Path,
+) -> None:
+    """`from ..other import thing` (level 2, from inside a non-package
+    module) must resolve to the sibling package `other` and still queue
+    `other.thing` as a submodule candidate."""
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        package_modules={
+            "__init__.py": "from .sub import mod\n",
+            "sub/__init__.py": "",
+            "sub/mod.py": "from ..other import thing\n",
+            "other/__init__.py": "",
+            "other/thing.py": "f = open('x.txt')\n",
+        },
+    )
+    findings = _check_import_time(Project(p))
+    io_findings = [f for f in findings if f.code == "contract.import_io"]
+    assert len(io_findings) == 1
+    assert "thing.py" in io_findings[0].message
+
+
+def test_import_io_flags_bare_relative_from_import(tmp_path: Path) -> None:
+    """`from . import mod` (no `imp.module`) queues `mod` as a submodule
+    candidate — pinned here alongside the `from .sub import name` cases
+    above so the whole family-import shape is covered."""
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        package_modules={
+            "__init__.py": "from . import mod\n",
+            "mod.py": "f = open('x.txt')\n",
+        },
+    )
+    findings = _check_import_time(Project(p))
+    assert "contract.import_io" in _codes(findings)
+
+
+def test_relative_from_import_attribute_not_submodule_is_silent(
+    tmp_path: Path,
+) -> None:
+    """`from .sub import CONST` where `CONST` is an attribute defined inside
+    `sub/__init__.py`, not a `sub/CONST.py` file, must not resolve to a file
+    — and a candidate that doesn't resolve to a file is silently dropped by
+    the BFS, not surfaced as `contract.import_unreadable`. Getting this
+    wrong would spray false advisories across every family repo that does
+    ordinary `from .sub import some_attribute`."""
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        package_modules={
+            "__init__.py": "from .sub import CONST\n",
+            "sub/__init__.py": "CONST = 1\n",
+        },
+    )
+    assert _check_import_time(Project(p)) == []
+
+
+def test_relative_from_import_multiple_names_mixed_module_and_attribute(
+    tmp_path: Path,
+) -> None:
+    """`from .sub import mod_a, ATTR, mod_c` — two of the three imported
+    names are submodules and must both be queued and scanned; `ATTR` isn't
+    a file and must resolve to nothing, silently."""
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        package_modules={
+            "__init__.py": "from .sub import mod_a, ATTR, mod_c\n",
+            "sub/__init__.py": "ATTR = 1\n",
+            "sub/mod_a.py": "f = open('a.txt')\n",
+            "sub/mod_c.py": "f = open('c.txt')\n",
+        },
+    )
+    findings = _check_import_time(Project(p))
+    assert _codes(findings) == ["contract.import_io", "contract.import_io"]
+    messages = " ".join(f.message for f in findings)
+    assert "mod_a.py" in messages
+    assert "mod_c.py" in messages
+
+
 # --- item 7: env-var shape vs. slug correspondence (known false positive) --------
 
 

@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Packages in a subdirectory of a multi-language repo.** `doctor` reads `.pre-commit-config.yaml` and `.github/workflows/` from the root of the git work tree that contains `--path`, so `doctor --family --path python` passes items 4 and 10 on the repo's root files. See [A package in a multi-language repo](../docs/the-family-contract.md#a-package-in-a-multi-language-repo).
 - **Item 6 exemption for `development-finance`**, the DFO client, reported as the `contract.readerkit_exempt` advisory. Item 7 still applies to it.
 - Item 6 counts `httpx2`, as a dependency or an import, as a fetch signal.
+- `add` checks for and writes `.pre-commit-config.yaml` and `.github/` at the root of the git work tree that contains `--path`, the place `doctor` reads them from. A package outside a git work tree keeps them in its own directory. Its output names each file by its path from the package directory, such as `../.pre-commit-config.yaml`.
 
 ### Fixed
 
+- Item 7 recognises a package whose cache module is `_cache.py`. It reported n/a for that layout when the package declared no cache dependency.
 - `drift.project_slug_mismatch` compares `project_slug` against `[tool.uv.build-backend] module-name` when it is set, so a distribution whose import package differs from its name passes.
 - A generated `tests/__init__.py` names its project. The template file lacked the `.jinja` suffix, so copier copied the `{{ project_slug }}` placeholder as text.
 

@@ -308,6 +308,19 @@ def test_cache_contract_na_when_package_does_not_cache(tmp_path: Path) -> None:
     assert _check_cache_contract(Project(p)) == []
 
 
+@pytest.mark.parametrize("module", ["cache.py", "_cache.py"])
+def test_cache_contract_applies_to_a_cache_module_without_a_cache_dependency(
+    tmp_path: Path, module: str
+) -> None:
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        package_modules={"__init__.py": "x = 1\n", module: "x = 1\n"},
+    )
+    assert "contract.cache_redirect" in _codes(_check_cache_contract(Project(p)))
+
+
 def test_cache_skipped_when_no_package_found(tmp_path: Path) -> None:
     """Same defect as item 6's n/a dash, one item over: no package root
     under src/ must not read as "doesn't cache" (see
@@ -323,7 +336,7 @@ def test_cache_skipped_when_no_package_found(tmp_path: Path) -> None:
 
 def test_cache_skipped_when_a_sibling_module_is_unparseable(tmp_path: Path) -> None:
     """package_caches never reads a module's parsed content — it only
-    checks declared dependencies and cache.py/cache/_cache directories — so
+    checks declared dependencies and cache.py/_cache.py/cache/_cache modules — so
     a parse failure elsewhere can't literally hide cache evidence the way
     it can for item 6. But a scan with any parse failure is still not a
     clean scan, and item 7 must not claim a verified n/a on the strength

@@ -1,5 +1,6 @@
 """Component installation logic."""
 
+import os
 import re
 import subprocess
 import tempfile
@@ -144,7 +145,7 @@ def get_conflicts(comp: ComponentDef, project: Project) -> list[str]:
     conflicts = [
         f"File exists: {relpath.removesuffix('.jinja')}"
         for relpath in comp.template_files
-        if project.has_file(relpath.removesuffix(".jinja"))
+        if project.tooling_path(relpath.removesuffix(".jinja")).exists()
     ]
     conflicts.extend(
         f"Config section exists: {section}"
@@ -354,7 +355,8 @@ def _install_from_rendered(
     for relpath in component.template_files:
         dest_relpath = relpath.removesuffix(".jinja")
         src_path = tempdir / dest_relpath
-        dest_path = project.path / dest_relpath
+        dest_path = project.tooling_path(dest_relpath)
+        shown = Path(os.path.relpath(dest_path, project.path)).as_posix()
 
         if not src_path.exists():
             console.print(
@@ -364,12 +366,12 @@ def _install_from_rendered(
             continue
 
         if dest_path.exists() and not force:
-            console.print(f"[yellow]Skipping existing file:[/yellow] {dest_relpath}")
+            console.print(f"[yellow]Skipping existing file:[/yellow] {shown}")
             continue
 
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
-        console.print(f"[green]✓[/green] Created: {dest_relpath}")
+        console.print(f"[green]✓[/green] Created: {shown}")
 
     if config_updates:
         with open(project.pyproject_path, encoding="utf-8") as f:

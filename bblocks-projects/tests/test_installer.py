@@ -14,6 +14,7 @@ from rich.console import Console as RichConsole
 from bblocks.projects.components import COMPONENTS_REGISTRY
 from bblocks.projects.installer import (
     _parse_dep_name,
+    get_conflicts,
     install_component,
     rendered_template_for,
 )
@@ -246,3 +247,80 @@ def test_install_component_message_renders_build_system_literal(
     output = buf.getvalue()
     assert "[build-system]" in output
     assert "  section" not in output
+
+
+@pytest.fixture
+def package_in_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Project:
+    """A package in `python/` of a git work tree, with a silenced console."""
+    (tmp_path / ".git").mkdir()
+    package = tmp_path / "python"
+    package.mkdir()
+    make_bblocks_project(package, with_components=())
+    monkeypatch.setattr(
+        "bblocks.projects.installer.console",
+        RichConsole(file=io.StringIO(), force_terminal=False, width=200),
+    )
+    monkeypatch.setattr("bblocks.projects.installer._add_dependencies", MagicMock())
+    return Project(package)
+
+
+@pytest.mark.parametrize(
+    ("component", "relpath"),
+    [
+        ("pre-commit", ".pre-commit-config.yaml"),
+        ("ci", ".github/workflows/ci.yml"),
+    ],
+)
+def test_install_component_places_repo_tooling_at_the_git_root(
+    package_in_repo: Project,
+    monkeypatch: pytest.MonkeyPatch,
+    component: str,
+    relpath: str,
+) -> None:
+    _patch_rendered_template_for(monkeypatch, {relpath: "rendered\n"})
+    buf = io.StringIO()
+    monkeypatch.setattr(
+        "bblocks.projects.installer.console",
+        RichConsole(file=buf, force_terminal=False, width=200),
+    )
+
+    install_component(
+        COMPONENTS_REGISTRY[component], package_in_repo, interactive=False
+    )
+
+    assert (package_in_repo.repo_root / relpath).read_text() == "rendered\n"
+    assert f"Created: ../{relpath}" in buf.getvalue()
+    assert not (package_in_repo.path / relpath).exists()
+
+
+def test_get_conflicts_reads_repo_tooling_from_the_git_root(
+    package_in_repo: Project,
+) -> None:
+    comp = COMPONENTS_REGISTRY["pre-commit"]
+    (package_in_repo.path / ".pre-commit-config.yaml").write_text("stray\n")
+    assert get_conflicts(comp, package_in_repo) == []
+
+    (package_in_repo.repo_root / ".pre-commit-config.yaml").write_text("root\n")
+    assert get_conflicts(comp, package_in_repo) == [
+        "File exists: .pre-commit-config.yaml"
+    ]
+
+
+def test_install_component_places_tooling_in_a_package_outside_git(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    make_bblocks_project(tmp_path, with_components=())
+    monkeypatch.setattr("bblocks.projects.installer._add_dependencies", MagicMock())
+    monkeypatch.setattr(
+        "bblocks.projects.installer.console",
+        RichConsole(file=io.StringIO(), force_terminal=False, width=200),
+    )
+    project = Project(tmp_path)
+    comp = COMPONENTS_REGISTRY["pre-commit"]
+    assert get_conflicts(comp, project) == []
+    _patch_rendered_template_for(monkeypatch, {".pre-commit-config.yaml": "x\n"})
+
+    install_component(comp, project, interactive=False)
+
+    assert (tmp_path / ".pre-commit-config.yaml").read_text() == "x\n"
+    assert get_conflicts(comp, project) == ["File exists: .pre-commit-config.yaml"]

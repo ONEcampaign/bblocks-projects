@@ -222,10 +222,6 @@ class Project:
         )
         return any(name in dep for dep in legacy)
 
-    def has_file(self, relative_path: str) -> bool:
-        """Check if project has a file at relative path."""
-        return (self.path / relative_path).exists()
-
     def has_config_section(self, section: str) -> bool:
         """Check if pyproject.toml has a config section."""
         parts = section.split(".")

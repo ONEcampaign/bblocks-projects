@@ -292,7 +292,7 @@ def test_no_rendered_file_keeps_template_syntax(
     project_type: str,
     overrides: dict[str, str],
 ) -> None:
-    """Every generated file is rendered: none still holds `{{` or `{%`.
+    """No generated file holds `{{` or `{%`.
 
     A template file without the `.jinja` suffix is copied verbatim, so its
     variables reach the generated project as literal text. GitHub Actions

@@ -444,7 +444,7 @@ def test_install_component_places_tooling_in_a_package_outside_git(
 def test_render_passes_the_module_name_to_the_template(
     fake_uv_project: Path,
 ) -> None:
-    """`[tool.uv.build-backend] module-name` reaches copier; without it, the slug does."""
+    """`[tool.uv.build-backend] module-name` reaches copier, and the slug does when it is unset."""
     pyproject = fake_uv_project / "pyproject.toml"
     pyproject.write_text(
         pyproject.read_text() + '[tool.uv.build-backend]\nmodule-name = "dfo"\n'

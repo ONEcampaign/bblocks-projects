@@ -545,7 +545,7 @@ def _make_subdirectory_repo(tmp_path: Path, *, git: bool) -> Project:
         dependencies=("readerkit>=0.1.0",),
         workflows=None,
     )
-    # The pre-commit component adds the dev dependency; the config lives at the root.
+    # The pre-commit component adds the dev dependency. The config lives at the root.
     (package / ".pre-commit-config.yaml").unlink()
     if git:
         (tmp_path / ".git").mkdir()
@@ -572,7 +572,7 @@ def test_subdirectory_package_outside_git_reads_its_own_directory(
     tmp_path: Path,
 ) -> None:
     """Without a `.git` above it the package directory is the root, so the
-    parent's files are invisible: the walk stops at the work tree."""
+    parent's files are invisible."""
     project = _make_subdirectory_repo(tmp_path, git=False)
     assert _codes(_check_pre_commit(project)) == ["contract.pre_commit"]
     assert _codes(_check_oidc_publish(project)) == ["contract.oidc_publish"]

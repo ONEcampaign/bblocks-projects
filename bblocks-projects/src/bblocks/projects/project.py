@@ -100,7 +100,7 @@ class Project:
         """Get where git tooling reads `relative_path` from.
 
         `.pre-commit-config.yaml` and anything under `.github/` resolve
-        against `repo_root`; every other path resolves against the project
+        against `repo_root`. Every other path resolves against the project
         directory.
         """
         base = self.repo_root if is_repo_level(relative_path) else self.path

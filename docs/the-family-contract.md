@@ -99,7 +99,7 @@ Packages must have a conda-forge feedstock. Only runs under `--check-remote`; it
 
 ## Exemptions
 
-Three packages are exempt from parts of the contract, because the contract doesn't make sense applied to them. Each exemption is a named entry in `contract.py`; no `pyproject.toml` or answers-file key opts a package out.
+Three packages are exempt from parts of the contract, because the contract doesn't make sense applied to them. Each exemption is a named entry in `contract.py`, and no `pyproject.toml` or answers-file key opts a package out.
 
 - **`dcp-tools`** is exempt from item 5 (the Python floor). It's on its own cadence. `doctor` reports this as an advisory (`contract.python_floor_exempt`), not a silent pass — the exemption stays visible in the report.
 - **`readerkit`** is exempt from items 6 and 7 (readerkit adoption and the cache contract). It's the provider both items point at — it can't depend on itself or delegate to itself. `doctor` passes it outright rather than flagging a package for not using its own library.
@@ -109,7 +109,7 @@ Three packages are exempt from parts of the contract, because the contract doesn
 
 A repo that ships the same library in several languages keeps one package per language directory, with the Python package in `python/` holding its own `pyproject.toml`, `src/`, `tests/`, and `.copier-answers.yml`. Run `doctor --family --path python` against it. `doctor` reads `.pre-commit-config.yaml` and `.github/workflows/` from the root of the git work tree that contains `--path`, because pre-commit and GitHub Actions read them only there, so items 4 and 10 pass on the root's files. Every other item reads the package directory. Outside a git work tree, `--path` itself is the root. `bblocks-projects add` follows the same split below the git root: it installs a component's package-side part (dev dependencies and `pyproject.toml` sections) and skips `.pre-commit-config.yaml` and `.github/`, printing each skipped root path and whether it exists. `doctor` advises `bblocks-projects add <component>` when the package-side part is missing, names the root file when only that is missing, and names both when both are. A root workflow for a package in `python/` needs `working-directory: python` on its jobs, and a root pre-commit hook needs `uv run --directory python`; the template's own files assume the package sits at the root.
 
-When `[tool.uv.build-backend] module-name` names the import package, as `module-name = "dfo"` does for `development-finance`, the answers file's `project_slug` should match `module-name`; the `drift.project_slug_mismatch` check compares against it.
+When `[tool.uv.build-backend] module-name` names the import package, as `module-name = "dfo"` does for `development-finance`, the answers file's `project_slug` should match `module-name`. The `drift.project_slug_mismatch` check compares against it.
 
 ## Known false negatives and false positives
 

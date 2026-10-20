@@ -1,5 +1,6 @@
 """Characterization tests for the copier template."""
 
+import re
 import shutil
 from pathlib import Path
 
@@ -23,6 +24,9 @@ _BASE_DATA = {
     "license": "mit",
     "github_username": "testuser",
 }
+
+
+_GITHUB_EXPRESSION = re.compile(r"\$\{\{.*?\}\}")
 
 
 @pytest.fixture(scope="session")
@@ -256,3 +260,36 @@ def test_default_preset_is_standalone_and_allows_python_311(
     )
     answers = (rendered / ".copier-answers.yml").read_text()
     assert "preset: standalone" in answers
+
+
+@pytest.mark.parametrize(
+    ("project_type", "overrides"),
+    [
+        ("package", {"preset": "family", "python_version": "3.12"}),
+        ("project", {"include_pytest": "true", "include_notebooks": "true"}),
+    ],
+)
+def test_no_rendered_file_keeps_template_syntax(
+    template_src: Path,
+    tmp_path: Path,
+    project_type: str,
+    overrides: dict[str, str],
+) -> None:
+    """Every generated file is rendered: none still holds `{{` or `{%`.
+
+    A template file without the `.jinja` suffix is copied verbatim, so its
+    variables reach the generated project as literal text. GitHub Actions
+    `${{ ... }}` expressions in workflows are legitimate output and are skipped.
+    """
+    rendered = _render(template_src, tmp_path / "rendered", project_type, **overrides)
+    files = [p for p in rendered.rglob("*") if p.is_file() and ".git" not in p.parts]
+    assert files
+    unrendered = [
+        str(path.relative_to(rendered))
+        for path in files
+        if any(
+            marker in _GITHUB_EXPRESSION.sub("", path.read_text())
+            for marker in ("{{", "{%")
+        )
+    ]
+    assert unrendered == []

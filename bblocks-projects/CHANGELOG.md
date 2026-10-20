@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `drift.project_slug_mismatch` compares `project_slug` against `[tool.uv.build-backend] module-name` when it is set, so a distribution whose import package differs from its name passes.
+- A generated `tests/__init__.py` names its project. The template file lacked the `.jinja` suffix, so copier copied the `{{ project_slug }}` placeholder as text.
 
 ## [1.1.1] - 2026-08-13
 

@@ -578,6 +578,34 @@ def test_subdirectory_package_outside_git_reads_its_own_directory(
     assert _codes(_check_oidc_publish(project)) == ["contract.oidc_publish"]
 
 
+def test_pre_commit_advice_names_the_root_file_below_the_git_root(
+    tmp_path: Path,
+) -> None:
+    project = _make_subdirectory_repo(tmp_path, git=True)
+    (tmp_path / ".pre-commit-config.yaml").unlink()
+
+    [finding] = _check_pre_commit(project)
+
+    assert ".pre-commit-config.yaml" in finding.remediation
+    assert str(tmp_path) in finding.remediation
+    assert "a-package-in-a-multi-language-repo" in finding.remediation
+    assert "bblocks-projects add" not in finding.remediation
+
+
+@pytest.mark.parametrize("git_at_package", [True, False])
+def test_pre_commit_advice_is_the_add_command_at_the_git_root(
+    tmp_path: Path, git_at_package: bool
+) -> None:
+    """A package at its git root, or outside git, can run `add` safely."""
+    project = _make_subdirectory_repo(tmp_path, git=False)
+    if git_at_package:
+        (project.path / ".git").mkdir()
+
+    [finding] = _check_pre_commit(project)
+
+    assert finding.remediation == "bblocks-projects add pre-commit"
+
+
 # --- gating: is_family_project, run_checks(family=...), stubs ----------------------
 
 

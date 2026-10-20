@@ -26,6 +26,11 @@ _PROJECT_TYPE_ALIASES: dict[str, ProjectType] = {"research": "project"}
 _REPO_LEVEL_NAMES = frozenset({".pre-commit-config.yaml", ".github"})
 
 
+def is_repo_level(relative_path: str) -> bool:
+    """Whether git tooling reads `relative_path` from the git work-tree root."""
+    return Path(relative_path).parts[0] in _REPO_LEVEL_NAMES
+
+
 class Project:
     """Represents a Python project for component installation."""
 
@@ -86,6 +91,11 @@ class Project:
                 return candidate
         return self.path
 
+    @property
+    def below_repo_root(self) -> bool:
+        """Whether the project directory sits below the root of its git work tree."""
+        return self.repo_root != self.path
+
     def tooling_path(self, relative_path: str) -> Path:
         """Get where git tooling reads `relative_path` from.
 
@@ -93,11 +103,7 @@ class Project:
         against `repo_root`; every other path resolves against the project
         directory.
         """
-        base = (
-            self.repo_root
-            if Path(relative_path).parts[0] in _REPO_LEVEL_NAMES
-            else self.path
-        )
+        base = self.repo_root if is_repo_level(relative_path) else self.path
         return base / relative_path
 
     def has_github_workflows(self) -> bool:

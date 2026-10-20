@@ -1,6 +1,5 @@
 """Component installation logic."""
 
-import os
 import re
 import subprocess
 import tempfile
@@ -18,13 +17,19 @@ from rich.syntax import Syntax
 
 from bblocks.projects.components import ComponentDef
 from bblocks.projects.config import DEFAULT_REF, resolve_template_url
-from bblocks.projects.project import Project
+from bblocks.projects.project import Project, is_repo_level
 
 console = Console()
 
 # PEP-440 specifiers (`==`, `!=`, `<=`, `>=`, `<`, `>`, `~=`, `===`),
 # extras (`[extra]`), markers (`;`), or whitespace all delimit the package name.
 _DEP_NAME_DELIM_RE = re.compile(r"[\[<>=!~ ;]")
+
+
+_MULTI_LANGUAGE_DOCS = (
+    "https://github.com/ONEcampaign/bblocks-projects/blob/main/docs/"
+    "the-family-contract.md#a-package-in-a-multi-language-repo"
+)
 
 
 class ConfigMergeError(ValueError):
@@ -116,6 +121,36 @@ def show_config_diff(
         console.print(Panel(syntax, border_style="dim"))
 
 
+def repo_root_files(comp: ComponentDef, project: Project) -> list[str]:
+    """List the shared root files `comp` would write for a package below the git root.
+
+    The paths are relative to the git root. The list is empty for a package
+    at its git root or outside git, where every file lands in the package
+    directory.
+    """
+    if not project.below_repo_root:
+        return []
+    files = (relpath.removesuffix(".jinja") for relpath in comp.template_files)
+    return [relpath for relpath in files if is_repo_level(relpath)]
+
+
+def root_file_advice(files: list[str], project: Project) -> str:
+    """Tell the user to edit shared root `files` by hand, with the docs section."""
+    return (
+        f"Edit {', '.join(files)} at the git root ({project.repo_root}) by hand. "
+        'See "A package in a multi-language repo": '
+        f"{_MULTI_LANGUAGE_DOCS}"
+    )
+
+
+def add_advice(comp: ComponentDef, project: Project) -> str:
+    """Name the command, or the root file to edit, that installs `comp`."""
+    files = repo_root_files(comp, project)
+    if files:
+        return root_file_advice(files, project)
+    return f"bblocks-projects add {comp.name}"
+
+
 def can_install_component(comp: ComponentDef, project: Project) -> tuple[bool, str]:
     """Check if a component can be installed into a project.
 
@@ -129,6 +164,11 @@ def can_install_component(comp: ComponentDef, project: Project) -> tuple[bool, s
     requires = comp.requires_project_type
     if requires is not None and project.detect_type() != requires:
         return False, f"{comp.name} component is only for {requires} projects"
+    if files := repo_root_files(comp, project):
+        return False, (
+            f"{comp.name} would write {', '.join(files)} at the git root, which "
+            f"every language in the repo shares. {root_file_advice(files, project)}"
+        )
     return True, ""
 
 
@@ -145,7 +185,7 @@ def get_conflicts(comp: ComponentDef, project: Project) -> list[str]:
     conflicts = [
         f"File exists: {relpath.removesuffix('.jinja')}"
         for relpath in comp.template_files
-        if project.tooling_path(relpath.removesuffix(".jinja")).exists()
+        if (project.path / relpath.removesuffix(".jinja")).exists()
     ]
     conflicts.extend(
         f"Config section exists: {section}"
@@ -174,6 +214,7 @@ def _render_template_to_tempdir(
         data={
             "project_name": project.get_project_name() or "project",
             "project_slug": project.get_project_slug(),
+            "module_name": project.get_module_name() or project.get_project_slug(),
             "project_description": "",
             "project_type": project_type,
             "include_notebooks": False,
@@ -355,8 +396,7 @@ def _install_from_rendered(
     for relpath in component.template_files:
         dest_relpath = relpath.removesuffix(".jinja")
         src_path = tempdir / dest_relpath
-        dest_path = project.tooling_path(dest_relpath)
-        shown = Path(os.path.relpath(dest_path, project.path)).as_posix()
+        dest_path = project.path / dest_relpath
 
         if not src_path.exists():
             console.print(
@@ -366,12 +406,12 @@ def _install_from_rendered(
             continue
 
         if dest_path.exists() and not force:
-            console.print(f"[yellow]Skipping existing file:[/yellow] {shown}")
+            console.print(f"[yellow]Skipping existing file:[/yellow] {dest_relpath}")
             continue
 
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
-        console.print(f"[green]✓[/green] Created: {shown}")
+        console.print(f"[green]✓[/green] Created: {dest_relpath}")
 
     if config_updates:
         with open(project.pyproject_path, encoding="utf-8") as f:

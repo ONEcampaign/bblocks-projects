@@ -14,6 +14,7 @@ from rich.console import Console as RichConsole
 from bblocks.projects.components import COMPONENTS_REGISTRY
 from bblocks.projects.installer import (
     _parse_dep_name,
+    can_install_component,
     get_conflicts,
     install_component,
     rendered_template_for,
@@ -264,43 +265,101 @@ def package_in_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Project:
     return Project(package)
 
 
-@pytest.mark.parametrize(
-    ("component", "relpath"),
-    [
-        ("pre-commit", ".pre-commit-config.yaml"),
-        ("ci", ".github/workflows/ci.yml"),
-    ],
-)
-def test_install_component_places_repo_tooling_at_the_git_root(
+_REPO_LEVEL_COMPONENTS = [
+    ("pre-commit", ".pre-commit-config.yaml"),
+    ("ci", ".github/workflows/ci.yml"),
+    ("pypi-publish", ".github/workflows/release.yml"),
+]
+
+
+def _snapshot(root: Path) -> dict[str, str | None]:
+    """Every path under `root`, with the text of each file."""
+    return {
+        path.relative_to(root).as_posix(): path.read_text() if path.is_file() else None
+        for path in sorted(root.rglob("*"))
+    }
+
+
+@pytest.mark.parametrize(("component", "relpath"), _REPO_LEVEL_COMPONENTS)
+@pytest.mark.parametrize("force", [False, True])
+def test_install_component_refuses_repo_level_files_below_the_git_root(
     package_in_repo: Project,
     monkeypatch: pytest.MonkeyPatch,
     component: str,
     relpath: str,
+    force: bool,
 ) -> None:
-    _patch_rendered_template_for(monkeypatch, {relpath: "rendered\n"})
+    """Root tooling is shared by every language, so `add` leaves it to the user."""
+    _patch_rendered_template_for(
+        monkeypatch,
+        {
+            relpath: "rendered\n",
+            "pyproject.toml": '[build-system]\nrequires = ["uv_build"]\n',
+        },
+    )
+    buf = io.StringIO()
+    monkeypatch.setattr(
+        "bblocks.projects.installer.console",
+        RichConsole(file=buf, force_terminal=False, width=500),
+    )
+    add_dependencies = MagicMock()
+    monkeypatch.setattr(
+        "bblocks.projects.installer._add_dependencies", add_dependencies
+    )
+    before = _snapshot(package_in_repo.repo_root)
+
+    installed = install_component(
+        COMPONENTS_REGISTRY[component], package_in_repo, interactive=False, force=force
+    )
+
+    assert installed is False
+    assert _snapshot(package_in_repo.repo_root) == before
+    add_dependencies.assert_not_called()
+    output = buf.getvalue()
+    assert relpath in output
+    assert "a-package-in-a-multi-language-repo" in output
+
+
+def test_install_component_installs_a_non_repo_level_component_below_the_git_root(
+    package_in_repo: Project,
+) -> None:
+    ok, _ = can_install_component(COMPONENTS_REGISTRY["ruff"], package_in_repo)
+    assert ok is True
+
+
+@pytest.mark.parametrize(("component", "relpath"), _REPO_LEVEL_COMPONENTS)
+def test_install_component_writes_repo_level_files_for_a_package_at_the_git_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    component: str,
+    relpath: str,
+) -> None:
+    (tmp_path / ".git").mkdir()
+    make_bblocks_project(tmp_path, with_components=(), github_username="octo")
     buf = io.StringIO()
     monkeypatch.setattr(
         "bblocks.projects.installer.console",
         RichConsole(file=buf, force_terminal=False, width=200),
     )
+    monkeypatch.setattr("bblocks.projects.installer._add_dependencies", MagicMock())
+    _patch_rendered_template_for(monkeypatch, {relpath: "rendered\n"})
 
-    install_component(
-        COMPONENTS_REGISTRY[component], package_in_repo, interactive=False
+    installed = install_component(
+        COMPONENTS_REGISTRY[component], Project(tmp_path), interactive=False
     )
 
-    assert (package_in_repo.repo_root / relpath).read_text() == "rendered\n"
-    assert f"Created: ../{relpath}" in buf.getvalue()
-    assert not (package_in_repo.path / relpath).exists()
+    assert installed is True
+    assert (tmp_path / relpath).read_text() == "rendered\n"
+    assert f"Created: {relpath}" in buf.getvalue()
+    assert "../" not in buf.getvalue()
 
 
-def test_get_conflicts_reads_repo_tooling_from_the_git_root(
-    package_in_repo: Project,
-) -> None:
+def test_get_conflicts_reads_the_package_directory(package_in_repo: Project) -> None:
     comp = COMPONENTS_REGISTRY["pre-commit"]
-    (package_in_repo.path / ".pre-commit-config.yaml").write_text("stray\n")
+    (package_in_repo.repo_root / ".pre-commit-config.yaml").write_text("root\n")
     assert get_conflicts(comp, package_in_repo) == []
 
-    (package_in_repo.repo_root / ".pre-commit-config.yaml").write_text("root\n")
+    (package_in_repo.path / ".pre-commit-config.yaml").write_text("stray\n")
     assert get_conflicts(comp, package_in_repo) == [
         "File exists: .pre-commit-config.yaml"
     ]
@@ -324,3 +383,26 @@ def test_install_component_places_tooling_in_a_package_outside_git(
 
     assert (tmp_path / ".pre-commit-config.yaml").read_text() == "x\n"
     assert get_conflicts(comp, project) == ["File exists: .pre-commit-config.yaml"]
+
+
+def test_render_passes_the_module_name_to_the_template(
+    fake_uv_project: Path,
+) -> None:
+    """`[tool.uv.build-backend] module-name` reaches copier; without it, the slug does."""
+    pyproject = fake_uv_project / "pyproject.toml"
+    pyproject.write_text(
+        pyproject.read_text() + '[tool.uv.build-backend]\nmodule-name = "dfo"\n'
+    )
+    seen: list[dict[str, Any]] = []
+
+    def _capture(**kwargs: Any) -> None:
+        seen.append(kwargs["data"])
+
+    with patch("bblocks.projects.installer._copier_run_copy", side_effect=_capture):
+        with rendered_template_for(Project(fake_uv_project)):
+            pass
+        pyproject.write_text(pyproject.read_text().split("[tool.uv")[0])
+        with rendered_template_for(Project(fake_uv_project)):
+            pass
+
+    assert [data["module_name"] for data in seen] == ["dfo", "demo"]

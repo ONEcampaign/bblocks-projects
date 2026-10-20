@@ -263,6 +263,28 @@ def test_check_components_reports_missing_with_remediation(tmp_path: Path) -> No
     assert ruff_findings[0].remediation == "bblocks-projects add ruff"
 
 
+def test_check_components_advises_the_root_file_below_the_git_root(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / ".git").mkdir()
+    package = tmp_path / "python"
+    package.mkdir()
+    p = _make_bblocks_project(
+        package, project_type="package", with_components=("ruff", "pytest")
+    )
+    findings = run_checks(Project(p), check_updates=False)
+    remediation = {
+        f.message.split()[3]: f.remediation
+        for f in findings
+        if f.code == "components.missing"
+    }
+    assert set(remediation) == {"pre-commit", "ci", "pypi-publish"}
+    assert ".pre-commit-config.yaml" in remediation["pre-commit"]
+    assert ".github/workflows/ci.yml" in remediation["ci"]
+    assert ".github/workflows/release.yml" in remediation["pypi-publish"]
+    assert not any("bblocks-projects add" in r for r in remediation.values())
+
+
 def test_check_template_version_skips_when_commit_absent(tmp_path: Path) -> None:
     p = _make_bblocks_project(tmp_path, commit=None)
     project = Project(p)

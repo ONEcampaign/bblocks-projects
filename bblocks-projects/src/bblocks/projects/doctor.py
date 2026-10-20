@@ -9,7 +9,7 @@ import yaml
 
 from bblocks.projects.components import COMPONENTS_REGISTRY, ComponentDef
 from bblocks.projects.config import resolve_template_url
-from bblocks.projects.installer import _parse_dep_name
+from bblocks.projects.installer import _parse_dep_name, add_advice
 from bblocks.projects.project import Project
 
 Severity = Literal["catastrophic", "finding", "advisory"]
@@ -274,7 +274,7 @@ def _check_components(project: Project) -> list[Finding]:
                     "components.missing",
                     "finding",
                     f"Component not installed: {comp.name} ({comp.description})",
-                    f"bblocks-projects add {comp.name}",
+                    add_advice(comp, project),
                 )
             )
     return findings

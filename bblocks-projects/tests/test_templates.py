@@ -103,6 +103,23 @@ def test_ci_quotes_project_slug_in_run_lines(
     assert "--cov='src/test_project'" in ci
 
 
+def test_ci_type_checks_the_module_name_when_it_differs_from_the_slug(
+    template_src: Path, tmp_path: Path
+) -> None:
+    rendered = _render(
+        template_src, tmp_path / "rendered", "package", module_name="dfo"
+    )
+    ci = (rendered / ".github" / "workflows" / "ci.yml").read_text()
+    assert "uv run ty check 'src/dfo'" in ci
+    assert "--cov='src/dfo'" in ci
+    assert "src/test_project" not in ci
+    pyproject = (rendered / "pyproject.toml").read_text()
+    assert "--cov=src/dfo " in pyproject
+    assert 'include = ["src/dfo"]' in pyproject
+    assert "source = src/dfo" in (rendered / ".coveragerc").read_text()
+    assert "src/dfo" in (rendered / "README.md").read_text()
+
+
 def test_ci_quotes_python_version_in_run_lines(
     template_src: Path, tmp_path: Path
 ) -> None:

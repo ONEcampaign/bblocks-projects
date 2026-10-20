@@ -1,5 +1,5 @@
 [run]
-source = src/{{ project_slug }}
+source = src/{{ module_name | default(project_slug) }}
 omit =
     */tests/*
     */__pycache__/*

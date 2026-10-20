@@ -23,7 +23,7 @@ uvx bblocks-projects add --list
 | `pytest` | `[tool.pytest.ini_options]`, `[tool.coverage.*]` + `pytest`, `pytest-cov` dev deps | any |
 | `pypi-publish` | `.github/workflows/release.yml` + ensures `[build-system]` exists | `package` only |
 
-`.pre-commit-config.yaml` and everything under `.github/` go at the root of the git work tree that contains the project, the place Git and GitHub read them from. For a package in `python/` of a multi-language repo, `add pre-commit --path python` writes `.pre-commit-config.yaml` at the repo root. A project outside a git work tree gets them in its own directory.
+`.pre-commit-config.yaml` and everything under `.github/` belong at the root of the git work tree, the place Git and GitHub read them from. For a package in `python/` of a multi-language repo, that root holds the tooling of every language, so `add pre-commit`, `add ci`, and `add pypi-publish` refuse there, name the root file to edit, and change nothing, with or without `--force`. Edit the root file by hand; [A package in a multi-language repo](the-family-contract.md#a-package-in-a-multi-language-repo) says what each file needs. `add ruff` and `add pytest` write only inside the package and work as usual. A package at its git root, or outside a git work tree, gets all five components in its own directory.
 
 Component definitions live in `src/bblocks/projects/components.py` if you want the precise list of files and config keys each one writes.
 

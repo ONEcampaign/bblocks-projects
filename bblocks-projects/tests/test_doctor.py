@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -263,26 +264,93 @@ def test_check_components_reports_missing_with_remediation(tmp_path: Path) -> No
     assert ruff_findings[0].remediation == "bblocks-projects add ruff"
 
 
-def test_check_components_advises_the_root_file_below_the_git_root(
-    tmp_path: Path,
-) -> None:
+def _pre_commit_below_git_root(
+    tmp_path: Path, *, package_part: bool, root_file: bool
+) -> Project:
+    """A package in `python/` whose pre-commit parts are each present or missing."""
     (tmp_path / ".git").mkdir()
     package = tmp_path / "python"
     package.mkdir()
     p = _make_bblocks_project(
-        package, project_type="package", with_components=("ruff", "pytest")
+        package, with_components=("pre-commit", "ruff", "ci", "pytest", "pypi-publish")
     )
-    findings = run_checks(Project(p), check_updates=False)
+    (package / ".pre-commit-config.yaml").unlink()
+    (tmp_path / ".github").mkdir()
+    (package / ".github" / "workflows").rename(tmp_path / ".github" / "workflows")
+    (package / ".github").rmdir()
+    if root_file:
+        (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n")
+    if not package_part:
+        pyproject = p / "pyproject.toml"
+        pyproject.write_text(pyproject.read_text().replace('"pre-commit>=4.6.0", ', ""))
+    return Project(p)
+
+
+PRE_COMMIT_ADVICE_CASES = [
+    pytest.param(
+        False,
+        True,
+        lambda r: r == "bblocks-projects add pre-commit",
+        id="package-part-missing",
+    ),
+    pytest.param(
+        True,
+        False,
+        lambda r: (
+            ".pre-commit-config.yaml" in r
+            and "by hand" in r
+            and "bblocks-projects add" not in r
+        ),
+        id="root-file-missing",
+    ),
+    pytest.param(
+        False,
+        False,
+        lambda r: (
+            "bblocks-projects add pre-commit" in r
+            and ".pre-commit-config.yaml" in r
+            and "by hand" in r
+        ),
+        id="both-missing",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("package_part", "root_file", "advice_ok"), PRE_COMMIT_ADVICE_CASES
+)
+def test_check_components_advises_the_missing_part_below_the_git_root(
+    tmp_path: Path,
+    package_part: bool,
+    root_file: bool,
+    advice_ok: Callable[[str], bool],
+) -> None:
+    project = _pre_commit_below_git_root(
+        tmp_path, package_part=package_part, root_file=root_file
+    )
+    findings = [
+        f
+        for f in run_checks(project, check_updates=False)
+        if f.code == "components.missing"
+    ]
+    [finding] = findings
+    assert "pre-commit" in finding.message
+    assert advice_ok(finding.remediation)
+
+
+def test_check_components_advises_the_add_command_for_a_root_file_at_the_git_root(
+    tmp_path: Path,
+) -> None:
+    """At the git root `add` writes the file too, so the command covers every part."""
+    (tmp_path / ".git").mkdir()
+    p = _make_bblocks_project(tmp_path, with_components=("ruff", "pytest"))
     remediation = {
         f.message.split()[3]: f.remediation
-        for f in findings
+        for f in run_checks(Project(p), check_updates=False)
         if f.code == "components.missing"
     }
     assert set(remediation) == {"pre-commit", "ci", "pypi-publish"}
-    assert ".pre-commit-config.yaml" in remediation["pre-commit"]
-    assert ".github/workflows/ci.yml" in remediation["ci"]
-    assert ".github/workflows/release.yml" in remediation["pypi-publish"]
-    assert not any("bblocks-projects add" in r for r in remediation.values())
+    assert all(r == f"bblocks-projects add {c}" for c, r in remediation.items())
 
 
 def test_check_template_version_skips_when_commit_absent(tmp_path: Path) -> None:

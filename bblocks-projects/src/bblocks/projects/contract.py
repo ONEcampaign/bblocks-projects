@@ -31,8 +31,8 @@ import yaml
 
 from bblocks.projects import _source_scan
 from bblocks.projects.components import COMPONENTS_REGISTRY
-from bblocks.projects.doctor import Finding, _component_installed
-from bblocks.projects.installer import _parse_dep_name, add_advice
+from bblocks.projects.doctor import Finding, _component_installed, install_advice
+from bblocks.projects.installer import _parse_dep_name
 from bblocks.projects.project import Project
 
 # Shared timeout for both network checks. `gh api` and `urlopen` are given
@@ -318,7 +318,7 @@ def _check_pre_commit(project: Project) -> list[Finding]:
             "contract.pre_commit",
             "finding",
             "pre-commit is not installed",
-            add_advice(COMPONENTS_REGISTRY["pre-commit"], project),
+            install_advice(COMPONENTS_REGISTRY["pre-commit"], project),
         )
     ]
 

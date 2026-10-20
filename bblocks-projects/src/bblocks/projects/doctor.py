@@ -9,8 +9,12 @@ import yaml
 
 from bblocks.projects.components import COMPONENTS_REGISTRY, ComponentDef
 from bblocks.projects.config import resolve_template_url
-from bblocks.projects.installer import _parse_dep_name, add_advice
-from bblocks.projects.project import Project
+from bblocks.projects.installer import (
+    _parse_dep_name,
+    repo_level_files,
+    root_file_advice,
+)
+from bblocks.projects.project import Project, is_repo_level
 
 Severity = Literal["catastrophic", "finding", "advisory"]
 
@@ -245,17 +249,58 @@ def _check_drift_python_version(project: Project) -> list[Finding]:
     return []
 
 
-def _component_installed(comp: ComponentDef, project: Project) -> bool:
-    categories = (
-        (
-            comp.template_files,
-            lambda r: project.tooling_path(r.removesuffix(".jinja")).exists(),
+def _missing_categories(comp: ComponentDef, project: Project) -> set[str]:
+    """Name the artifact categories of `comp` that `project` lacks entirely.
+
+    A category is missing when the component has items in it and none is
+    present. `root_files` holds the repo-level files, read from the git root;
+    `package_files`, `pyproject_sections`, and `dev_deps` live in the package.
+    """
+    files = [relpath.removesuffix(".jinja") for relpath in comp.template_files]
+    categories = {
+        "root_files": (
+            [f for f in files if is_repo_level(f)],
+            lambda f: project.tooling_path(f).exists(),
         ),
-        (comp.pyproject_sections, project.has_config_section),
-        (comp.dev_deps, lambda d: project.has_dev_dependency(_parse_dep_name(d))),
+        "package_files": (
+            [f for f in files if not is_repo_level(f)],
+            lambda f: project.tooling_path(f).exists(),
+        ),
+        "pyproject_sections": (comp.pyproject_sections, project.has_config_section),
+        "dev_deps": (
+            comp.dev_deps,
+            lambda d: project.has_dev_dependency(_parse_dep_name(d)),
+        ),
+    }
+    return {
+        name
+        for name, (items, present) in categories.items()
+        if items and not any(present(item) for item in items)
+    }
+
+
+def _component_installed(comp: ComponentDef, project: Project) -> bool:
+    has_artifacts = bool(
+        comp.template_files or comp.pyproject_sections or comp.dev_deps
     )
-    checks = [any(pred(item) for item in items) for items, pred in categories if items]
-    return all(checks) if checks else False
+    return has_artifacts and not _missing_categories(comp, project)
+
+
+def install_advice(comp: ComponentDef, project: Project) -> str:
+    """Name what installs the missing part of `comp`.
+
+    At the git root, or outside git, `add` installs everything. Below the git
+    root `add` installs the package-side part and leaves the shared root
+    files, so the advice names the root file when that is what is missing.
+    """
+    command = f"bblocks-projects add {comp.name}"
+    missing = _missing_categories(comp, project)
+    if not project.below_repo_root or "root_files" not in missing:
+        return command
+    root_advice = root_file_advice(repo_level_files(comp), project)
+    if missing == {"root_files"}:
+        return root_advice
+    return f"Run `{command}` for the package part. {root_advice}"
 
 
 def _check_components(project: Project) -> list[Finding]:
@@ -274,7 +319,7 @@ def _check_components(project: Project) -> list[Finding]:
                     "components.missing",
                     "finding",
                     f"Component not installed: {comp.name} ({comp.description})",
-                    add_advice(comp, project),
+                    install_advice(comp, project),
                 )
             )
     return findings

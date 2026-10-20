@@ -11,6 +11,7 @@ from typing import Any
 import copier
 import tomlkit
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.syntax import Syntax
@@ -121,34 +122,35 @@ def show_config_diff(
         console.print(Panel(syntax, border_style="dim"))
 
 
-def repo_root_files(comp: ComponentDef, project: Project) -> list[str]:
-    """List the shared root files `comp` would write for a package below the git root.
+def _template_paths(comp: ComponentDef) -> list[str]:
+    """List the paths `comp` writes, relative to the package or the git root."""
+    return [relpath.removesuffix(".jinja") for relpath in comp.template_files]
 
-    The paths are relative to the git root. The list is empty for a package
-    at its git root or outside git, where every file lands in the package
-    directory.
+
+def repo_level_files(comp: ComponentDef) -> list[str]:
+    """List the files of `comp` that git tooling reads from the git root."""
+    return [relpath for relpath in _template_paths(comp) if is_repo_level(relpath)]
+
+
+def package_files(comp: ComponentDef, project: Project) -> list[str]:
+    """List the files `add` writes into the package directory for `comp`.
+
+    A package below its git root shares the repo-level files with every
+    language in the repo, so `add` leaves them out. At the git root or
+    outside git, every file of the component lands in the package.
     """
     if not project.below_repo_root:
-        return []
-    files = (relpath.removesuffix(".jinja") for relpath in comp.template_files)
-    return [relpath for relpath in files if is_repo_level(relpath)]
+        return _template_paths(comp)
+    return [relpath for relpath in _template_paths(comp) if not is_repo_level(relpath)]
 
 
 def root_file_advice(files: list[str], project: Project) -> str:
-    """Tell the user to edit shared root `files` by hand, with the docs section."""
+    """Tell the user to add shared root `files` by hand, with the docs section."""
     return (
-        f"Edit {', '.join(files)} at the git root ({project.repo_root}) by hand. "
+        f"Add {', '.join(files)} at the git root ({project.repo_root}) by hand. "
         'See "A package in a multi-language repo": '
         f"{_MULTI_LANGUAGE_DOCS}"
     )
-
-
-def add_advice(comp: ComponentDef, project: Project) -> str:
-    """Name the command, or the root file to edit, that installs `comp`."""
-    files = repo_root_files(comp, project)
-    if files:
-        return root_file_advice(files, project)
-    return f"bblocks-projects add {comp.name}"
 
 
 def can_install_component(comp: ComponentDef, project: Project) -> tuple[bool, str]:
@@ -164,11 +166,6 @@ def can_install_component(comp: ComponentDef, project: Project) -> tuple[bool, s
     requires = comp.requires_project_type
     if requires is not None and project.detect_type() != requires:
         return False, f"{comp.name} component is only for {requires} projects"
-    if files := repo_root_files(comp, project):
-        return False, (
-            f"{comp.name} would write {', '.join(files)} at the git root, which "
-            f"every language in the repo shares. {root_file_advice(files, project)}"
-        )
     return True, ""
 
 
@@ -183,9 +180,9 @@ def get_conflicts(comp: ComponentDef, project: Project) -> list[str]:
         List of conflict descriptions
     """
     conflicts = [
-        f"File exists: {relpath.removesuffix('.jinja')}"
-        for relpath in comp.template_files
-        if (project.path / relpath.removesuffix(".jinja")).exists()
+        f"File exists: {relpath}"
+        for relpath in package_files(comp, project)
+        if (project.path / relpath).exists()
     ]
     conflicts.extend(
         f"Config section exists: {section}"
@@ -358,6 +355,22 @@ def install_component(
         )
 
 
+def _report_skipped_root_files(component: ComponentDef, project: Project) -> None:
+    """Name each repo-level file `add` leaves alone, and say whether it exists."""
+    for relpath in repo_level_files(component):
+        root_path = project.tooling_path(relpath)
+        if root_path.exists():
+            console.print(
+                f"[yellow]Skipped {relpath}:[/yellow] shared at the git root, "
+                f"where it exists ({escape(str(root_path))})"
+            )
+        else:
+            console.print(
+                f"[yellow]Skipped {relpath}:[/yellow] shared at the git root, "
+                f"where it is missing. {escape(root_file_advice([relpath], project))}"
+            )
+
+
 def _install_from_rendered(
     component: ComponentDef,
     project: Project,
@@ -393,8 +406,11 @@ def _install_from_rendered(
             console.print("[yellow]Installation cancelled[/yellow]")
             return False
 
-    for relpath in component.template_files:
-        dest_relpath = relpath.removesuffix(".jinja")
+    if project.below_repo_root:
+        _report_skipped_root_files(component, project)
+
+    written: list[str] = []
+    for dest_relpath in package_files(component, project):
         src_path = tempdir / dest_relpath
         dest_path = project.path / dest_relpath
 
@@ -412,6 +428,7 @@ def _install_from_rendered(
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
         console.print(f"[green]✓[/green] Created: {dest_relpath}")
+        written.append(f"Created: {dest_relpath}")
 
     if config_updates:
         with open(project.pyproject_path, encoding="utf-8") as f:
@@ -430,6 +447,7 @@ def _install_from_rendered(
         with open(project.pyproject_path, "w", encoding="utf-8") as f:
             tomlkit.dump(pyproject_data, f)
         console.print("[green]✓[/green] Updated: pyproject.toml")
+        written.append("Updated: pyproject.toml")
 
         project.reload_pyproject()
 
@@ -442,20 +460,34 @@ def _install_from_rendered(
             else:
                 console.print(f"  • {dep}")
 
-        if interactive:
-            if Confirm.ask("\nAdd these dependencies now?"):
-                _add_dependencies(project, dev_deps, dev=True)
-            else:
-                console.print(
-                    "[yellow]Skipped dependency installation. "
-                    "Add manually with:[/yellow]"
-                )
-                console.print(f"  uv add --dev {' '.join(dev_deps)}")
-        else:
-            _add_dependencies(project, dev_deps, dev=True)
+        if interactive and not Confirm.ask("\nAdd these dependencies now?"):
+            console.print(
+                "[yellow]Skipped dependency installation. Add manually with:[/yellow]"
+            )
+            console.print(f"  uv add --dev {' '.join(dev_deps)}")
+        elif not _add_dependencies(project, dev_deps, dev=True):
+            console.print(
+                f"\n[bold red]✗ {component.name} not installed:[/bold red] "
+                "`uv add` failed."
+            )
+            if written:
+                console.print("Left in place, not rolled back:")
+                for item in written:
+                    console.print(f"  • {item}")
+            return False
 
     steps = component.post_install_steps
-    if steps:
+    installed_in_package = (
+        package_files(component, project)
+        or component.pyproject_sections
+        or component.dev_deps
+    )
+    if steps and not installed_in_package:
+        console.print(
+            f"\n[yellow]{component.name} has nothing to install in the "
+            "package.[/yellow]"
+        )
+    elif steps:
         console.print("\n[bold green]✓ Component installed successfully![/bold green]")
         console.print("\n[bold]Next steps:[/bold]")
         rendered_steps = _render_post_install_steps(component, project, steps)
@@ -467,13 +499,18 @@ def _install_from_rendered(
 
 def _add_dependencies(
     project: Project, dependencies: list[str], dev: bool = False
-) -> None:
+) -> bool:
     """Add dependencies to project using uv.
+
+    Stops at the first failure and prints uv's stderr.
 
     Args:
         project: Target project
         dependencies: List of package specs
         dev: Whether these are dev dependencies
+
+    Returns:
+        True when every dependency is present afterwards
     """
     for dep in dependencies:
         dep_name = _parse_dep_name(dep)
@@ -485,18 +522,26 @@ def _add_dependencies(
         if has_it:
             continue
 
-        try:
-            cmd = ["uv", "add"]
-            if dev:
-                cmd.append("--dev")
-            cmd.append(dep)
+        cmd = ["uv", "add"]
+        if dev:
+            cmd.append("--dev")
+        cmd.append(dep)
 
+        try:
             subprocess.run(
                 cmd,
                 cwd=project.path,
                 check=True,
                 capture_output=True,
+                text=True,
             )
-            console.print(f"[green]✓[/green] Added: {dep}")
-        except (subprocess.CalledProcessError, OSError) as e:
-            console.print(f"[red]✗[/red] Failed to add {dep}: {e}")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[red]✗[/red] Failed to add {dep}: {escape(str(e))}")
+            if e.stderr:
+                console.print(escape(e.stderr.strip()))
+            return False
+        except OSError as e:
+            console.print(f"[red]✗[/red] Failed to add {dep}: {escape(str(e))}")
+            return False
+        console.print(f"[green]✓[/green] Added: {dep}")
+    return True

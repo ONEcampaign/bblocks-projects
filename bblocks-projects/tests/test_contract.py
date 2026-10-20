@@ -578,18 +578,28 @@ def test_subdirectory_package_outside_git_reads_its_own_directory(
     assert _codes(_check_oidc_publish(project)) == ["contract.oidc_publish"]
 
 
-def test_pre_commit_advice_names_the_root_file_below_the_git_root(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("package_part", "root_file"),
+    [(False, True), (True, False), (False, False)],
+    ids=["package-part-missing", "root-file-missing", "both-missing"],
+)
+def test_pre_commit_advice_names_the_missing_part_below_the_git_root(
+    tmp_path: Path, package_part: bool, root_file: bool
 ) -> None:
     project = _make_subdirectory_repo(tmp_path, git=True)
-    (tmp_path / ".pre-commit-config.yaml").unlink()
+    if not root_file:
+        (tmp_path / ".pre-commit-config.yaml").unlink()
+    if not package_part:
+        pyproject = project.path / "pyproject.toml"
+        pyproject.write_text(pyproject.read_text().replace('"pre-commit>=4.6.0", ', ""))
+        project.reload_pyproject()
 
     [finding] = _check_pre_commit(project)
 
-    assert ".pre-commit-config.yaml" in finding.remediation
-    assert str(tmp_path) in finding.remediation
-    assert "a-package-in-a-multi-language-repo" in finding.remediation
-    assert "bblocks-projects add" not in finding.remediation
+    advice = finding.remediation or ""
+    assert ("bblocks-projects add pre-commit" in advice) is not package_part
+    assert (".pre-commit-config.yaml" in advice) is not root_file
+    assert ("a-package-in-a-multi-language-repo" in advice) is not root_file
 
 
 @pytest.mark.parametrize("git_at_package", [True, False])

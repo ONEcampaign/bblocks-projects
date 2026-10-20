@@ -280,16 +280,28 @@ def _snapshot(root: Path) -> dict[str, str | None]:
     }
 
 
+def _capture_console(monkeypatch: pytest.MonkeyPatch) -> io.StringIO:
+    buf = io.StringIO()
+    monkeypatch.setattr(
+        "bblocks.projects.installer.console",
+        RichConsole(file=buf, force_terminal=False, width=500),
+    )
+    return buf
+
+
 @pytest.mark.parametrize(("component", "relpath"), _REPO_LEVEL_COMPONENTS)
 @pytest.mark.parametrize("force", [False, True])
-def test_install_component_refuses_repo_level_files_below_the_git_root(
+@pytest.mark.parametrize("root_file_exists", [False, True])
+def test_install_component_installs_the_package_part_below_the_git_root(
     package_in_repo: Project,
     monkeypatch: pytest.MonkeyPatch,
     component: str,
     relpath: str,
     force: bool,
+    root_file_exists: bool,
 ) -> None:
-    """Root tooling is shared by every language, so `add` leaves it to the user."""
+    """A repo-level file is shared by every language, so `add` never writes it."""
+    comp = COMPONENTS_REGISTRY[component]
     _patch_rendered_template_for(
         monkeypatch,
         {
@@ -297,27 +309,72 @@ def test_install_component_refuses_repo_level_files_below_the_git_root(
             "pyproject.toml": '[build-system]\nrequires = ["uv_build"]\n',
         },
     )
-    buf = io.StringIO()
-    monkeypatch.setattr(
-        "bblocks.projects.installer.console",
-        RichConsole(file=buf, force_terminal=False, width=500),
-    )
+    buf = _capture_console(monkeypatch)
     add_dependencies = MagicMock()
     monkeypatch.setattr(
         "bblocks.projects.installer._add_dependencies", add_dependencies
     )
+    root_file = package_in_repo.repo_root / relpath
+    if root_file_exists:
+        root_file.parent.mkdir(parents=True, exist_ok=True)
+        root_file.write_text("root\n")
     before = _snapshot(package_in_repo.repo_root)
 
-    installed = install_component(
-        COMPONENTS_REGISTRY[component], package_in_repo, interactive=False, force=force
-    )
+    installed = install_component(comp, package_in_repo, interactive=False, force=force)
 
-    assert installed is False
+    assert installed is True
     assert _snapshot(package_in_repo.repo_root) == before
-    add_dependencies.assert_not_called()
+    if comp.dev_deps:
+        add_dependencies.assert_called_once_with(
+            package_in_repo, comp.dev_deps, dev=True
+        )
+    else:
+        add_dependencies.assert_not_called()
     output = buf.getvalue()
-    assert relpath in output
-    assert "a-package-in-a-multi-language-repo" in output
+    assert f"Skipped {relpath}" in output
+    assert ("where it exists" in output) is root_file_exists
+    assert ("by hand" in output) is not root_file_exists
+    assert ("a-package-in-a-multi-language-repo" in output) is not root_file_exists
+
+
+def test_install_component_installs_several_components_below_the_git_root(
+    package_in_repo: Project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`add ruff pre-commit` installs the package-side part of both."""
+    _patch_rendered_template_for(
+        monkeypatch,
+        {
+            ".pre-commit-config.yaml": "rendered\n",
+            "pyproject.toml": "[tool.ruff]\nline-length = 88\n",
+        },
+    )
+    _capture_console(monkeypatch)
+    add_dependencies = MagicMock()
+    monkeypatch.setattr(
+        "bblocks.projects.installer._add_dependencies", add_dependencies
+    )
+    ruff = COMPONENTS_REGISTRY["ruff"]
+    pre_commit = COMPONENTS_REGISTRY["pre-commit"]
+
+    with rendered_template_for(package_in_repo) as rendered:
+        results = [
+            install_component(
+                comp,
+                package_in_repo,
+                interactive=False,
+                rendered_template_dir=rendered,
+            )
+            for comp in (ruff, pre_commit)
+        ]
+
+    assert results == [True, True]
+    assert [call.args[1] for call in add_dependencies.call_args_list] == [
+        ruff.dev_deps,
+        pre_commit.dev_deps,
+    ]
+    assert package_in_repo.has_config_section("tool.ruff")
+    assert not (package_in_repo.repo_root / ".pre-commit-config.yaml").exists()
+    assert not (package_in_repo.path / ".pre-commit-config.yaml").exists()
 
 
 def test_install_component_installs_a_non_repo_level_component_below_the_git_root(
@@ -354,15 +411,14 @@ def test_install_component_writes_repo_level_files_for_a_package_at_the_git_root
     assert "../" not in buf.getvalue()
 
 
-def test_get_conflicts_reads_the_package_directory(package_in_repo: Project) -> None:
+def test_get_conflicts_ignores_repo_level_files_below_the_git_root(
+    package_in_repo: Project,
+) -> None:
+    """`add` writes no repo-level file there, so none can conflict."""
     comp = COMPONENTS_REGISTRY["pre-commit"]
     (package_in_repo.repo_root / ".pre-commit-config.yaml").write_text("root\n")
-    assert get_conflicts(comp, package_in_repo) == []
-
     (package_in_repo.path / ".pre-commit-config.yaml").write_text("stray\n")
-    assert get_conflicts(comp, package_in_repo) == [
-        "File exists: .pre-commit-config.yaml"
-    ]
+    assert get_conflicts(comp, package_in_repo) == []
 
 
 def test_install_component_places_tooling_in_a_package_outside_git(

@@ -680,6 +680,7 @@ _FETCH_DEP_NAMES = frozenset(
     {
         "requests",
         "httpx",
+        "httpx2",
         "aiohttp",
         "urllib3",
         "requests-cache",
@@ -689,6 +690,7 @@ _FETCH_DEP_NAMES = frozenset(
 _FETCH_IMPORT_MODULES = (
     "requests",
     "httpx",
+    "httpx2",
     "aiohttp",
     "urllib.request",
     "http.client",

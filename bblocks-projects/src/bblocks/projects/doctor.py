@@ -205,17 +205,27 @@ def _check_drift_project_slug(project: Project) -> list[Finding]:
     answer_slug = project.copier_answers.get("project_slug")
     if not isinstance(answer_slug, str):
         return []
-    actual_slug = project.get_project_slug()
-    if answer_slug != actual_slug:
-        return [
-            Finding(
-                "drift.project_slug_mismatch",
-                "finding",
-                f"project_slug={answer_slug!r} but pyproject name slugifies to {actual_slug!r}",
-                "Update either .copier-answers.yml or [project].name in pyproject.toml",
-            )
-        ]
-    return []
+    # `project_slug` names the import package (`src/<slug>/`). uv_build's
+    # `module-name` sets that package when it differs from the distribution
+    # name, as `development-finance` does with module `dfo`.
+    module_name = project.get_module_name()
+    actual_slug = module_name or project.get_project_slug()
+    if answer_slug == actual_slug:
+        return []
+    if module_name:
+        actual = f"pyproject module-name is {module_name!r}"
+        field = "[tool.uv.build-backend] module-name"
+    else:
+        actual = f"pyproject name slugifies to {actual_slug!r}"
+        field = "[project].name"
+    return [
+        Finding(
+            "drift.project_slug_mismatch",
+            "finding",
+            f"project_slug={answer_slug!r} but {actual}",
+            f"Update either .copier-answers.yml or {field} in pyproject.toml",
+        )
+    ]
 
 
 def _check_drift_python_version(project: Project) -> list[Finding]:
@@ -237,7 +247,10 @@ def _check_drift_python_version(project: Project) -> list[Finding]:
 
 def _component_installed(comp: ComponentDef, project: Project) -> bool:
     categories = (
-        (comp.template_files, lambda r: project.has_file(r.removesuffix(".jinja"))),
+        (
+            comp.template_files,
+            lambda r: project.tooling_path(r.removesuffix(".jinja")).exists(),
+        ),
         (comp.pyproject_sections, project.has_config_section),
         (comp.dev_deps, lambda d: project.has_dev_dependency(_parse_dep_name(d))),
     )

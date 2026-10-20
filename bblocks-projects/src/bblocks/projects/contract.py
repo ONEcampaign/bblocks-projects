@@ -68,7 +68,11 @@ FAMILY_CONTRACT: tuple[ContractItem, ...] = (
         6,
         "readerkit",
         "readerkit for HTTP and caching",
-        ("contract.readerkit", "contract.readerkit_skipped"),
+        (
+            "contract.readerkit",
+            "contract.readerkit_exempt",
+            "contract.readerkit_skipped",
+        ),
     ),
     ContractItem(
         7,
@@ -119,6 +123,15 @@ FAMILY_CONTRACT: tuple[ContractItem, ...] = (
 
 FLOOR = (3, 12)
 FLOOR_EXEMPT: frozenset[str] = frozenset({"dcp-tools", "dcp_tools"})
+# Item 6 exemptions: normalized distribution name -> the reason `doctor`
+# reports. Item 7 still applies to every package listed here.
+READERKIT_EXEMPT: dict[str, str] = {
+    "development-finance": (
+        "the DFO client needs an async httpx2 transport and a store of "
+        "immutable, digest-keyed versions, and readerkit is synchronous with "
+        "a TTL-bound cache"
+    ),
+}
 
 
 @cache
@@ -380,6 +393,18 @@ def _check_readerkit(project: Project) -> list[Finding]:
     assert modules is not None  # "present" only reachable with real modules
     if _source_scan.package_uses_readerkit(project, modules):
         return []
+    # Like FLOOR_EXEMPT, the exemption only softens a failure, and stays
+    # visible as an advisory.
+    name = _source_scan.normalize_name(project.get_project_name() or "")
+    if name in READERKIT_EXEMPT:
+        return [
+            Finding(
+                "contract.readerkit_exempt",
+                "advisory",
+                f"readerkit not required: {READERKIT_EXEMPT[name]}",
+                None,
+            )
+        ]
     evidence = _source_scan.fetch_evidence(project, modules)
     return [
         Finding(

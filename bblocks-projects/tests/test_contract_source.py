@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from bblocks.projects.contract import (
     _check_cache_contract,
     _check_import_time,
@@ -107,17 +109,61 @@ def test_readerkit_provider_exemption(tmp_path: Path) -> None:
     assert _check_readerkit(Project(p)) == []
 
 
-def test_readerkit_fetch_indicator_via_import_only(tmp_path: Path) -> None:
+@pytest.mark.parametrize("module", ["httpx", "httpx2"])
+def test_readerkit_fetch_indicator_via_import_only(tmp_path: Path, module: str) -> None:
     """No fetch library declared as a dependency, but imported directly."""
     p = make_bblocks_project(
         tmp_path,
         preset="family",
         python_version="3.12",
-        package_modules={"__init__.py": "import httpx\n"},
+        package_modules={"__init__.py": f"import {module}\n"},
     )
     findings = _check_readerkit(Project(p))
     assert _codes(findings) == ["contract.readerkit"]
-    assert "Imports httpx" in findings[0].message
+    assert f"Imports {module}" in findings[0].message
+
+
+def test_readerkit_fetch_indicator_via_httpx2_dependency(tmp_path: Path) -> None:
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        dependencies=("httpx2>=2.15",),
+        package_modules={"__init__.py": "x = 1\n"},
+    )
+    findings = _check_readerkit(Project(p))
+    assert _codes(findings) == ["contract.readerkit"]
+    assert "Declares httpx2" in findings[0].message
+
+
+def _make_dfo_client(tmp_path: Path) -> Project:
+    """A `development-finance` package on httpx2 that caches with no cache surface."""
+    p = make_bblocks_project(
+        tmp_path,
+        slug="development_finance",
+        preset="family",
+        python_version="3.12",
+        dependencies=("httpx2>=2.15", "platformdirs>=4.0"),
+        package_modules={"__init__.py": "import httpx2\n"},
+    )
+    return Project(p)
+
+
+def test_readerkit_exemption_is_advisory(tmp_path: Path) -> None:
+    findings = _check_readerkit(_make_dfo_client(tmp_path))
+    assert _codes(findings) == ["contract.readerkit_exempt"]
+    assert findings[0].severity == "advisory"
+
+
+def test_readerkit_exemption_leaves_the_cache_contract_in_force(
+    tmp_path: Path,
+) -> None:
+    findings = _check_cache_contract(_make_dfo_client(tmp_path))
+    assert _codes(findings) == [
+        "contract.cache_redirect",
+        "contract.cache_env_var",
+        "contract.cache_disable",
+    ]
 
 
 # --- item 7: the cache contract --------------------------------------------------

@@ -227,3 +227,48 @@ def test_package_roots_does_not_descend_into_a_found_package(tmp_path: Path) -> 
     (pkg_dir / "__init__.py").touch()
     (pkg_dir / "sub" / "__init__.py").touch()
     assert Project(tmp_path).package_roots() == [pkg_dir]
+
+
+@pytest.mark.parametrize("git_entry", ["dir", "file"])
+def test_tooling_path_resolves_repo_level_files_from_git_root(
+    tmp_path: Path, git_entry: str
+) -> None:
+    """A `.git` file marks a linked worktree or submodule root."""
+    if git_entry == "dir":
+        (tmp_path / ".git").mkdir()
+    else:
+        (tmp_path / ".git").write_text("gitdir: elsewhere\n", encoding="utf-8")
+    package = tmp_path / "python"
+    package.mkdir()
+    project = Project(package)
+    assert project.repo_root == tmp_path
+    assert project.tooling_path(".pre-commit-config.yaml") == (
+        tmp_path / ".pre-commit-config.yaml"
+    )
+    assert project.tooling_path(".github/workflows/ci.yml") == (
+        tmp_path / ".github" / "workflows" / "ci.yml"
+    )
+    assert project.tooling_path("pyproject.toml") == package / "pyproject.toml"
+
+
+def test_repo_root_is_the_project_outside_a_git_work_tree(tmp_path: Path) -> None:
+    package = tmp_path / "python"
+    package.mkdir()
+    project = Project(package)
+    assert project.repo_root == package
+    assert (
+        project.tooling_path(".github/workflows") == package / ".github" / "workflows"
+    )
+
+
+def test_read_workflows_reads_the_git_root(tmp_path: Path) -> None:
+    (tmp_path / ".git").mkdir()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "release.yml").write_text("name: release\n", encoding="utf-8")
+    package = tmp_path / "python"
+    (package / ".github" / "workflows").mkdir(parents=True)
+    (package / ".github" / "workflows" / "ignored.yml").write_text(
+        "name: ignored\n", encoding="utf-8"
+    )
+    assert Project(package).read_workflows() == {"release.yml": "name: release\n"}

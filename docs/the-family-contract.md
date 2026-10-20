@@ -15,9 +15,9 @@ The bblocks family is the set of ONE Data Python packages meant to interoperate 
 | 1   | uv build backend                   | `[build-system].build-backend` is `"uv_build"`                             | finding                                                     |
 | 2   | ruff                               | `tool.ruff*` configured and `ruff` in dev deps                             | finding                                                     |
 | 3   | ty                                 | `ty` in dev deps and `[tool.ty.src]` or `[tool.ty.environment]` configured | finding                                                     |
-| 4   | pre-commit                         | `.pre-commit-config.yaml` present and `pre-commit` in dev deps             | finding                                                     |
+| 4   | pre-commit                         | `.pre-commit-config.yaml` at the git root and `pre-commit` in dev deps     | finding                                                     |
 | 5   | Python floor 3.12                  | `requires-python` lower bound is `>=3.12` or higher                        | finding (advisory if exempt)                                |
-| 6   | readerkit for HTTP and caching     | a package that fetches depends on and imports `readerkit`                  | finding, n/a if it doesn't fetch                            |
+| 6   | readerkit for HTTP and caching     | a package that fetches depends on and imports `readerkit`                  | finding (advisory if exempt), n/a if it doesn't fetch       |
 | 7   | Cache redirectable and disableable | a package that caches exposes a redirect, an env var, and a disable path   | finding, n/a if it doesn't cache                            |
 | 8   | No import-time side effects        | nothing on the I/O denylist runs during `import <package>`                 | finding (denylisted calls), advisory (unclassifiable calls) |
 | 9   | No upper-bound pins                | no `<`, `<=`, `~=`, or `==` cap on a runtime dependency                    | finding                                                     |
@@ -25,7 +25,7 @@ The bblocks family is the set of ONE Data Python packages meant to interoperate 
 | 11  | Branch protection                  | `main` is protected — classic protection or a ruleset                      | finding, only under `--check-remote`                        |
 | 12  | conda-forge feedstock              | a conda-forge package exists for the project                               | finding, packages only, `--check-remote`                    |
 
-Items 1–5 and 9 read straight off `pyproject.toml` — no interpretation involved. Item 10 parses `.github/workflows/*.yml` as structured YAML to resolve which job publishes and what permissions actually apply to it, falling back to a whole-file text scan when it can't. Items 6, 7, and 8 are static source-inspection heuristics: `doctor` walks the package's AST without executing it. Items 11 and 12 are the only two that touch the network.
+Items 1–5 and 9 read straight off `pyproject.toml` — no interpretation involved. Item 10 parses the git root's `.github/workflows/*.yml` as structured YAML to resolve which job publishes and what permissions actually apply to it, falling back to a whole-file text scan when it can't. Items 6, 7, and 8 are static source-inspection heuristics: `doctor` walks the package's AST without executing it. Items 11 and 12 are the only two that touch the network.
 
 ### Item 5: the floor, and how it's enforced going forward
 
@@ -37,7 +37,7 @@ It's also enforced earlier than `doctor`: once a repo's `.copier-answers.yml` re
 
 A package that fetches over HTTP must depend on and import [`readerkit`](https://github.com/ONEcampaign/readerkit) rather than rolling its own `requests`/`httpx`/caching stack. "Does it fetch" is decided first — a package with no HTTP surface renders `–` (not applicable), not a pass.
 
-Detection: `doctor` checks the runtime dependency list for `requests`, `httpx`, `aiohttp`, `urllib3`, `requests-cache`, or `requests-ratelimiter`, and separately scans the package's own first-party imports for `requests`, `httpx`, `aiohttp`, `urllib.request`, or `http.client`. If either signal fires, the package must also declare and import `readerkit`.
+Detection: `doctor` checks the runtime dependency list for `requests`, `httpx`, `httpx2`, `aiohttp`, `urllib3`, `requests-cache`, or `requests-ratelimiter`, and separately scans the package's own first-party imports for `requests`, `httpx`, `httpx2`, `aiohttp`, `urllib.request`, or `http.client`. If either signal fires, the package must also declare and import `readerkit`.
 
 "Doesn't fetch" and "couldn't tell" are different outcomes. When no package can be found under `src/`, or a module the scan needed to read fails to parse, `doctor` can't say either way — it reports `contract.readerkit_skipped` (an advisory) rather than rendering the `–` a genuine non-fetcher earns.
 
@@ -77,7 +77,7 @@ This has a consequence for `readerkit` itself: because every consumer declares i
 
 ### Item 10: OIDC publishing
 
-The package's PyPI-publishing workflow must use [trusted publishing](https://docs.pypi.org/trusted-publishers/) (`permissions: id-token: write`, no token secret) rather than an API token. `doctor` looks for a publish command (`uv publish`, `twine upload`, `pypa/gh-action-pypi-publish`, `poetry publish`) across every workflow in `.github/workflows/*.yml` / `*.yaml`; no match at all is a finding on its own.
+The package's PyPI-publishing workflow must use [trusted publishing](https://docs.pypi.org/trusted-publishers/) (`permissions: id-token: write`, no token secret) rather than an API token. `doctor` looks for a publish command (`uv publish`, `twine upload`, `pypa/gh-action-pypi-publish`, `poetry publish`) across every workflow in the git root's `.github/workflows/*.yml` / `*.yaml`, the only workflows GitHub runs; no match at all is a finding on its own. A publishing job in a multi-language repo that runs `uv publish` with `working-directory: python` counts.
 
 When a publish command does exist, `doctor` parses the workflow as YAML, finds the job that runs it, and checks _that job_ — not the file as a whole — for `id-token: write`. A job's own `permissions:` block replaces the workflow-level default rather than merging with it (GitHub Actions semantics, not a bblocks convention), so a job with `permissions:` of its own that omits `id-token: write` gets no credit for a workflow-level grant, and a grant on some other job never counts. Only a job with no `permissions:` of its own inherits the workflow-level block. Token use is checked the same way, scoped to the publishing job's own `env`/`with`/`run` text plus the workflow-level `env` it inherits: a named token secret (`PYPI_API_TOKEN`, `TWINE_PASSWORD`, and similar) fails it directly, and so does a secret bound to an arbitrarily-named variable that's then passed to a `--password`/`--token`/`-p`-shaped flag — the indirection a literal-name check alone would miss.
 
@@ -99,10 +99,17 @@ Packages must have a conda-forge feedstock. Only runs under `--check-remote`; it
 
 ## Exemptions
 
-Two packages are permanently exempt from parts of the contract, because the contract doesn't make sense applied to them:
+Three packages are exempt from parts of the contract, because the contract doesn't make sense applied to them. Each exemption is a named entry in `contract.py`; no `pyproject.toml` or answers-file key opts a package out.
 
 - **`dcp-tools`** is exempt from item 5 (the Python floor). It's on its own cadence. `doctor` reports this as an advisory (`contract.python_floor_exempt`), not a silent pass — the exemption stays visible in the report.
 - **`readerkit`** is exempt from items 6 and 7 (readerkit adoption and the cache contract). It's the provider both items point at — it can't depend on itself or delegate to itself. `doctor` passes it outright rather than flagging a package for not using its own library.
+- **`development-finance`**, the DFO client (import module `dfo`), is exempt from item 6. It needs an async `httpx2` transport and a store of immutable, digest-keyed dataset versions that a cache refresh never touches, and readerkit is synchronous with a TTL-bound cache. `doctor` reports `contract.readerkit_exempt`, an advisory, when the package fetches without readerkit (`READERKIT_EXEMPT` in `contract.py`, beside `FLOOR_EXEMPT`). Item 7 still applies in full: the client must expose a cache redirect, a `DFO_CACHE_DIR` env var, and a disable path.
+
+## A package in a multi-language repo
+
+A repo that ships the same library in several languages keeps one package per language directory, with the Python package in `python/` holding its own `pyproject.toml`, `src/`, `tests/`, and `.copier-answers.yml`. Run `doctor --family --path python` against it. `doctor` reads `.pre-commit-config.yaml` and `.github/workflows/` from the root of the git work tree that contains `--path`, because pre-commit and GitHub Actions read them only there, so items 4 and 10 pass on the root's files. Every other item reads the package directory. Outside a git work tree, `--path` itself is the root.
+
+When `[tool.uv.build-backend] module-name` names the import package, as `module-name = "dfo"` does for `development-finance`, the answers file's `project_slug` should match `module-name`; the `drift.project_slug_mismatch` check compares against it.
 
 ## Known false negatives and false positives
 

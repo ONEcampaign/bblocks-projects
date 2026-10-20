@@ -58,11 +58,14 @@ def test_oidc_item_claims_the_unscoped_advisory_code() -> None:
     assert "contract.oidc_publish_unscoped" in oidc_item.codes
 
 
-def test_readerkit_item_claims_the_skipped_advisory_code() -> None:
-    """`contract.readerkit_skipped` must render nested under item 6, not
-    fall into the CLI's unclaimed-codes bucket."""
+@pytest.mark.parametrize(
+    "code", ["contract.readerkit_skipped", "contract.readerkit_exempt"]
+)
+def test_readerkit_item_claims_its_advisory_codes(code: str) -> None:
+    """Item 6's advisories must render nested under item 6, not fall into
+    the CLI's unclaimed-codes bucket."""
     item = next(i for i in FAMILY_CONTRACT if i.key == "readerkit")
-    assert "contract.readerkit_skipped" in item.codes
+    assert code in item.codes
 
 
 def test_cache_item_claims_the_skipped_advisory_code() -> None:
@@ -509,6 +512,70 @@ def test_oidc_flags_no_publish_workflow(tmp_path: Path) -> None:
 def test_oidc_skipped_for_project_type(tmp_path: Path) -> None:
     p = make_bblocks_project(tmp_path, project_type="project", with_components=())
     assert _check_oidc_publish(Project(p)) == []
+
+
+# --- a package in a subdirectory of a multi-language repo ---------------------------
+
+_SUBDIRECTORY_RELEASE_WORKFLOW = (
+    "name: Python release\n"
+    "on:\n"
+    "  push:\n"
+    "    tags: ['python-v*']\n"
+    "jobs:\n"
+    "  publish:\n"
+    "    runs-on: ubuntu-latest\n"
+    "    environment: pypi\n"
+    "    permissions:\n"
+    "      id-token: write\n"
+    "    defaults:\n"
+    "      run:\n"
+    "        working-directory: python\n"
+    "    steps:\n"
+    "      - run: uv build\n"
+    "      - run: uv publish\n"
+)
+
+
+def _make_subdirectory_repo(tmp_path: Path, *, git: bool) -> Project:
+    """A family package in `python/`, with pre-commit and workflows at the root."""
+    (tmp_path / "python").mkdir()
+    package = make_family_project(
+        tmp_path / "python",
+        with_components=("pre-commit", "ruff", "pytest"),
+        dependencies=("readerkit>=0.1.0",),
+        workflows=None,
+    )
+    # The pre-commit component adds the dev dependency; the config lives at the root.
+    (package / ".pre-commit-config.yaml").unlink()
+    if git:
+        (tmp_path / ".git").mkdir()
+    (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "python-release.yml").write_text(
+        _SUBDIRECTORY_RELEASE_WORKFLOW, encoding="utf-8"
+    )
+    return Project(package)
+
+
+def test_subdirectory_package_reads_repo_level_files_from_git_root(
+    tmp_path: Path,
+) -> None:
+    project = _make_subdirectory_repo(tmp_path, git=True)
+    findings = run_contract_checks(project, check_remote=False)
+    assert [f for f in findings if f.severity == "finding"] == []
+    assert _check_pre_commit(project) == []
+    assert _check_oidc_publish(project) == []
+
+
+def test_subdirectory_package_outside_git_reads_its_own_directory(
+    tmp_path: Path,
+) -> None:
+    """Without a `.git` above it the package directory is the root, so the
+    parent's files are invisible: the walk stops at the work tree."""
+    project = _make_subdirectory_repo(tmp_path, git=False)
+    assert _codes(_check_pre_commit(project)) == ["contract.pre_commit"]
+    assert _codes(_check_oidc_publish(project)) == ["contract.oidc_publish"]
 
 
 # --- gating: is_family_project, run_checks(family=...), stubs ----------------------

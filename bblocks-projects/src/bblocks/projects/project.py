@@ -3,6 +3,7 @@
 import re
 import subprocess
 import tomllib
+from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal
 
@@ -18,6 +19,11 @@ ProjectType = Literal["package", "project", "unknown"]
 # analysis, pipelines, and internal tooling) but old projects still have
 # `project_type: research` in their .copier-answers.yml. Normalize on read.
 _PROJECT_TYPE_ALIASES: dict[str, ProjectType] = {"research": "project"}
+
+# Top-level names that git tooling reads from the work-tree root, wherever
+# pyproject.toml sits: pre-commit loads `.pre-commit-config.yaml` from the
+# root, and GitHub runs only the workflows under the root's `.github/`.
+_REPO_LEVEL_NAMES = frozenset({".pre-commit-config.yaml", ".github"})
 
 
 class Project:
@@ -65,9 +71,38 @@ class Project:
         """Check if project has tests/ directory."""
         return (self.path / "tests").is_dir()
 
+    @cached_property
+    def repo_root(self) -> Path:
+        """Get the root of the git work tree that contains the project.
+
+        The nearest directory, the project's own included, holding a `.git`
+        entry (a directory, or a file in a linked worktree or submodule).
+        Falls back to the project directory outside a git work tree, so a
+        package in `python/` of a multi-language repo resolves to the repo
+        root and a standalone package resolves to itself.
+        """
+        for candidate in (self.path, *self.path.parents):
+            if (candidate / ".git").exists():
+                return candidate
+        return self.path
+
+    def tooling_path(self, relative_path: str) -> Path:
+        """Get where git tooling reads `relative_path` from.
+
+        `.pre-commit-config.yaml` and anything under `.github/` resolve
+        against `repo_root`; every other path resolves against the project
+        directory.
+        """
+        base = (
+            self.repo_root
+            if Path(relative_path).parts[0] in _REPO_LEVEL_NAMES
+            else self.path
+        )
+        return base / relative_path
+
     def has_github_workflows(self) -> bool:
-        """Check if project has .github/workflows/ directory."""
-        return (self.path / ".github" / "workflows").is_dir()
+        """Check if the repo has a .github/workflows/ directory."""
+        return self.tooling_path(".github/workflows").is_dir()
 
     @property
     def copier_answers(self) -> dict[str, Any]:
@@ -122,6 +157,16 @@ class Project:
         project_data = self.pyproject_data.get("project", {})
         name = project_data.get("name") if isinstance(project_data, dict) else None
         return name if isinstance(name, str) else None
+
+    def get_module_name(self) -> str | None:
+        """Get `[tool.uv.build-backend].module-name`, or None when unset."""
+        module = (
+            self.pyproject_data.get("tool", {})
+            .get("uv", {})
+            .get("build-backend", {})
+            .get("module-name")
+        )
+        return module if isinstance(module, str) else None
 
     def get_project_slug(self) -> str:
         """Get Python-identifier form of project name (hyphens → underscores)."""
@@ -288,10 +333,11 @@ class Project:
     def read_workflows(self) -> dict[str, str]:
         """Get every GitHub Actions workflow as raw text, filename -> text.
 
-        Globs `.github/workflows/*.yml` and `*.yaml`. Unreadable files are
-        skipped rather than raising.
+        Globs `.github/workflows/*.yml` and `*.yaml` under `repo_root`, the
+        only workflows GitHub runs. Unreadable files are skipped rather than
+        raising.
         """
-        workflows_dir = self.path / ".github" / "workflows"
+        workflows_dir = self.tooling_path(".github/workflows")
         if not workflows_dir.is_dir():
             return {}
         result: dict[str, str] = {}

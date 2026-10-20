@@ -126,6 +126,28 @@ def test_check_drift_project_slug_mismatch(tmp_path: Path) -> None:
     assert "bar_baz" in slug_findings[0].message
 
 
+@pytest.mark.parametrize(
+    ("answer_slug", "expected"),
+    [("dfo", []), ("development_finance", ["drift.project_slug_mismatch"])],
+)
+def test_check_drift_project_slug_honours_module_name(
+    tmp_path: Path, answer_slug: str, expected: list[str]
+) -> None:
+    """`project_slug` names the import package, which uv_build's
+    `module-name` sets apart from the distribution name."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "development-finance"\nrequires-python = ">=3.12"\n\n'
+        '[tool.uv.build-backend]\nmodule-name = "dfo"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / ".copier-answers.yml").write_text(
+        f"project_type: package\nproject_slug: {answer_slug}\n", encoding="utf-8"
+    )
+    (tmp_path / "src" / answer_slug).mkdir(parents=True)
+    findings = run_checks(Project(tmp_path), check_updates=False)
+    assert [f.code for f in findings if f.code.startswith("drift.")] == expected
+
+
 def test_check_drift_python_version_mismatch(tmp_path: Path) -> None:
     p = _make_bblocks_project(tmp_path, python_version="3.11")
     answers = (p / ".copier-answers.yml").read_text()

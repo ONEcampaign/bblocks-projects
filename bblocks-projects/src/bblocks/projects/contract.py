@@ -96,7 +96,12 @@ FAMILY_CONTRACT: tuple[ContractItem, ...] = (
             "contract.import_no_package",
         ),
     ),
-    ContractItem(9, "no_caps", "No upper-bound pins", ("contract.dependency_cap",)),
+    ContractItem(
+        9,
+        "no_caps",
+        "No upper-bound pins",
+        ("contract.dependency_cap", "contract.dependency_cap_exempt"),
+    ),
     ContractItem(
         10,
         "oidc",
@@ -131,6 +136,20 @@ READERKIT_EXEMPT: dict[str, str] = {
         "immutable, digest-keyed versions, and readerkit is synchronous with "
         "a TTL-bound cache"
     ),
+}
+# Item 9 exemptions: normalized distribution name -> {normalized dependency
+# name: the reason `doctor` reports}. Only a listed dependency of a listed
+# distribution is softened; every other cap is still a finding.
+_HTTPX2_POOL_REASON = (
+    "the client routes connections through httpx2's and httpcore2's private "
+    "pool layout to enforce its deadlines, and a release that moves it breaks "
+    "every client at construction"
+)
+CAP_EXEMPT: dict[str, dict[str, str]] = {
+    "development-finance": {
+        "httpx2": _HTTPX2_POOL_REASON,
+        "httpcore2": _HTTPX2_POOL_REASON,
+    },
 }
 
 
@@ -582,12 +601,26 @@ _CAP_VERSION_RE = re.compile(r"(?:~=|==(?!=))\s*([\w.*+!-]+)")
 
 
 def _check_dependency_cap(project: Project) -> list[Finding]:
+    exempt = CAP_EXEMPT.get(
+        _source_scan.normalize_name(project.get_project_name() or ""), {}
+    )
     findings: list[Finding] = []
     for spec in project.iter_runtime_dependencies():
         stripped = spec.strip()
         name = _parse_dep_name(stripped)
         remainder = stripped[len(name) :]
         if not _CAP_RE.search(remainder):
+            continue
+        if reason := exempt.get(_source_scan.normalize_name(name)):
+            # Like READERKIT_EXEMPT, the exemption stays visible as an advisory.
+            findings.append(
+                Finding(
+                    "contract.dependency_cap_exempt",
+                    "advisory",
+                    f"{stripped} pins an upper bound, allowed: {reason}",
+                    None,
+                )
+            )
             continue
         lower_match = _LOWER_BOUND_RE.search(remainder) or _CAP_VERSION_RE.search(
             remainder

@@ -292,12 +292,58 @@ def test_dependency_cap_still_flags_other_optional_groups(tmp_path: Path) -> Non
 
 
 def test_dependency_cap_flags_0x_family_sibling(tmp_path: Path) -> None:
-    """Item 9 is absolute: no exemption for a family sibling or for a
+    """Item 9 grants no exemption to a family sibling or to a
     dependency still on a 0.x version. `imf-reader`'s
     `readerkit>=0.1.0,<0.2` must be flagged like any other capped dep."""
     p = make_bblocks_project(tmp_path, dependencies=("readerkit>=0.1.0,<0.2",))
     findings = _check_dependency_cap(Project(p))
     assert _codes(findings) == ["contract.dependency_cap"]
+
+
+@pytest.mark.parametrize(
+    ("slug", "dependencies", "expected"),
+    [
+        # (a) a listed dependency of an exempt distribution: advisory only.
+        (
+            "development_finance",
+            (
+                "httpx2>=2.15,<2.16",
+                "httpcore2>=2.15,<2.16; sys_platform != 'emscripten'",
+            ),
+            [
+                ("contract.dependency_cap_exempt", "advisory"),
+                ("contract.dependency_cap_exempt", "advisory"),
+            ],
+        ),
+        # (b) an unlisted capped dependency of the same distribution.
+        (
+            "development_finance",
+            ("pydantic>=2.9,<3.0",),
+            [("contract.dependency_cap", "finding")],
+        ),
+        # (c) another distribution capping a dependency that is exempt elsewhere.
+        (
+            "demo",
+            ("httpx2>=2.15,<2.16",),
+            [("contract.dependency_cap", "finding")],
+        ),
+    ],
+)
+def test_dependency_cap_exemption_is_per_distribution_and_dependency(
+    tmp_path: Path,
+    slug: str,
+    dependencies: tuple[str, ...],
+    expected: list[tuple[str, str]],
+) -> None:
+    p = make_bblocks_project(tmp_path, slug=slug, dependencies=dependencies)
+    findings = _check_dependency_cap(Project(p))
+    assert [(f.code, f.severity) for f in findings] == expected
+
+
+def test_dependency_cap_item_claims_its_advisory_code() -> None:
+    """Item 9's advisory must render nested under item 9."""
+    item = next(i for i in FAMILY_CONTRACT if i.key == "no_caps")
+    assert "contract.dependency_cap_exempt" in item.codes
 
 
 # --- item 10: OIDC publishing ------------------------------------------------------

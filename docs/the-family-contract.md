@@ -20,7 +20,7 @@ The bblocks family is the set of ONE Data Python packages meant to interoperate 
 | 6   | readerkit for HTTP and caching     | a package that fetches depends on and imports `readerkit`                  | finding (advisory if exempt), n/a if it doesn't fetch       |
 | 7   | Cache redirectable and disableable | a package that caches exposes a redirect, an env var, and a disable path   | finding, n/a if it doesn't cache                            |
 | 8   | No import-time side effects        | nothing on the I/O denylist runs during `import <package>`                 | finding (denylisted calls), advisory (unclassifiable calls) |
-| 9   | No upper-bound pins                | no `<`, `<=`, `~=`, or `==` cap on a runtime dependency                    | finding                                                     |
+| 9   | No upper-bound pins                | no `<`, `<=`, `~=`, or `==` cap on a runtime dependency                    | finding (advisory if exempt)                                |
 | 10  | OIDC publishing                    | the PyPI publish workflow uses trusted publishing, not a token             | finding, packages only                                      |
 | 11  | Branch protection                  | `main` is protected — classic protection or a ruleset                      | finding, only under `--check-remote`                        |
 | 12  | conda-forge feedstock              | a conda-forge package exists for the project                               | finding, packages only, `--check-remote`                    |
@@ -71,9 +71,9 @@ A module that fails to parse is `contract.import_unreadable` (`advisory`), never
 
 No runtime dependency (`[project].dependencies` or any `[project.optional-dependencies]` list except `dev`) may cap an external library with `<`, `<=`, `~=`, or `==`. `!=` is not a cap. `[build-system].requires`, `[dependency-groups]`, and `[project.optional-dependencies.dev]` are not scanned — the template's own `uv_build<0.13` pin and dev-tool caps aren't dependencies a consumer resolves against, and `dev` is excluded here for the same reason `Project.has_dev_dependency` already treats it as the pre-PEP-735 home for dev tooling.
 
-One finding per capped dependency, naming the exact spec and a relaxed replacement. This item is absolute: there is no exemption for a family sibling or for a dependency still on a `0.x` version. `readerkit>=0.1.0,<0.2` in a runtime dependency list is flagged the same as any other capped external dependency.
+One finding per capped dependency, naming the exact spec and a relaxed replacement. A family sibling or a dependency still on a `0.x` version gets no exemption, and the one listed exemption under [Exemptions](#exemptions) names its dependencies. `readerkit>=0.1.0,<0.2` in a runtime dependency list is flagged the same as any other capped external dependency.
 
-This has a consequence for `readerkit` itself: because every consumer declares it uncapped, `readerkit` must never bump `CACHE_SCHEMA_VERSION` without a coordinated family release. That constant is a path segment in every consumer's on-disk cache directory (see `readerkit.resolve_cache_dir`), so a schema bump silently relocates caches across the whole family the next time each consumer happens to pick up the new `readerkit` release — with no release of the consumer itself involved, and no version bound anywhere to stop it from arriving unannounced. The family accepts this as the trade-off for item 9 admitting no exemption.
+This has a consequence for `readerkit` itself: because every consumer declares it uncapped, `readerkit` must never bump `CACHE_SCHEMA_VERSION` without a coordinated family release. That constant is a path segment in every consumer's on-disk cache directory (see `readerkit.resolve_cache_dir`), so a schema bump silently relocates caches across the whole family the next time each consumer happens to pick up the new `readerkit` release — with no release of the consumer itself involved, and no version bound anywhere to stop it from arriving unannounced. The family accepts this as the trade-off for item 9 admitting no exemption for a family sibling.
 
 ### Item 10: OIDC publishing
 
@@ -99,11 +99,12 @@ Packages must have a conda-forge feedstock. Only runs under `--check-remote`; it
 
 ## Exemptions
 
-Three packages are exempt from parts of the contract, because the contract doesn't make sense applied to them. Each exemption is a named entry in `contract.py`, and no `pyproject.toml` or answers-file key opts a package out.
+Three packages hold exemptions from parts of the contract, because the contract doesn't make sense applied to them. Each exemption is a named entry in `contract.py`, and no `pyproject.toml` or answers-file key opts a package out.
 
 - **`dcp-tools`** is exempt from item 5 (the Python floor). It's on its own cadence. `doctor` reports this as an advisory (`contract.python_floor_exempt`), not a silent pass — the exemption stays visible in the report.
 - **`readerkit`** is exempt from items 6 and 7 (readerkit adoption and the cache contract). It's the provider both items point at — it can't depend on itself or delegate to itself. `doctor` passes it outright rather than flagging a package for not using its own library.
 - **`development-finance`**, the DFO client (import module `dfo`), is exempt from item 6. It needs an async `httpx2` transport and a store of immutable, digest-keyed dataset versions that a cache refresh never touches, and readerkit is synchronous with a TTL-bound cache. `doctor` reports `contract.readerkit_exempt`, an advisory, when the package fetches without readerkit (`READERKIT_EXEMPT` in `contract.py`, beside `FLOOR_EXEMPT`). Item 7 still applies in full: the client must expose a cache redirect, a `DFO_CACHE_DIR` env var, and a disable path.
+- **`development-finance`** is also exempt from item 9 for `httpx2` and `httpcore2` alone. The client routes connections through their private pool layout to enforce its deadlines, so it bounds both below the next minor release, which could move that layout and break every client at construction. `doctor` reports each bound as `contract.dependency_cap_exempt`, an advisory (`CAP_EXEMPT` in `contract.py`), and any other capped dependency of the package is still a finding.
 
 ## A package in a multi-language repo
 

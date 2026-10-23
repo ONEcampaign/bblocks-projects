@@ -30,7 +30,7 @@ uv run ruff check .
 uv run ruff format .
 
 # Run type checker
-uv run ty check src/{{ project_slug }}
+uv run ty check src/{{ module_name | default(project_slug) }}
 ```
 
 ### Building
@@ -42,7 +42,7 @@ uv build
 {% else %}
 ## Project Structure
 
-- `src/{{ project_slug }}/`: Reusable analysis code (importable package)
+- `src/{{ module_name | default(project_slug) }}/`: Reusable analysis code (importable package)
 - `data/raw/`: Input data files (gitignored — never commit source data)
 - `data/processed/`: Derived/processed data (tracked in git){% if include_notebooks %}
 - `notebooks/`: Jupyter notebooks for exploration{% endif %}
@@ -57,7 +57,7 @@ uv run ruff check .
 uv run ruff format .
 
 # Run type checker
-uv run ty check src/{{ project_slug }}
+uv run ty check src/{{ module_name | default(project_slug) }}
 ```
 {% endif %}
 

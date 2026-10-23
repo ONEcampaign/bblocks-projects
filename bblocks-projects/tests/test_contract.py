@@ -58,11 +58,14 @@ def test_oidc_item_claims_the_unscoped_advisory_code() -> None:
     assert "contract.oidc_publish_unscoped" in oidc_item.codes
 
 
-def test_readerkit_item_claims_the_skipped_advisory_code() -> None:
-    """`contract.readerkit_skipped` must render nested under item 6, not
-    fall into the CLI's unclaimed-codes bucket."""
+@pytest.mark.parametrize(
+    "code", ["contract.readerkit_skipped", "contract.readerkit_exempt"]
+)
+def test_readerkit_item_claims_its_advisory_codes(code: str) -> None:
+    """Item 6's advisories must render nested under item 6, not fall into
+    the CLI's unclaimed-codes bucket."""
     item = next(i for i in FAMILY_CONTRACT if i.key == "readerkit")
-    assert "contract.readerkit_skipped" in item.codes
+    assert code in item.codes
 
 
 def test_cache_item_claims_the_skipped_advisory_code() -> None:
@@ -289,12 +292,58 @@ def test_dependency_cap_still_flags_other_optional_groups(tmp_path: Path) -> Non
 
 
 def test_dependency_cap_flags_0x_family_sibling(tmp_path: Path) -> None:
-    """Item 9 is absolute: no exemption for a family sibling or for a
+    """Item 9 grants no exemption to a family sibling or to a
     dependency still on a 0.x version. `imf-reader`'s
     `readerkit>=0.1.0,<0.2` must be flagged like any other capped dep."""
     p = make_bblocks_project(tmp_path, dependencies=("readerkit>=0.1.0,<0.2",))
     findings = _check_dependency_cap(Project(p))
     assert _codes(findings) == ["contract.dependency_cap"]
+
+
+@pytest.mark.parametrize(
+    ("slug", "dependencies", "expected"),
+    [
+        # (a) a listed dependency of an exempt distribution: advisory only.
+        (
+            "development_finance",
+            (
+                "httpx2>=2.15,<2.16",
+                "httpcore2>=2.15,<2.16; sys_platform != 'emscripten'",
+            ),
+            [
+                ("contract.dependency_cap_exempt", "advisory"),
+                ("contract.dependency_cap_exempt", "advisory"),
+            ],
+        ),
+        # (b) an unlisted capped dependency of the same distribution.
+        (
+            "development_finance",
+            ("pydantic>=2.9,<3.0",),
+            [("contract.dependency_cap", "finding")],
+        ),
+        # (c) another distribution capping a dependency that is exempt elsewhere.
+        (
+            "demo",
+            ("httpx2>=2.15,<2.16",),
+            [("contract.dependency_cap", "finding")],
+        ),
+    ],
+)
+def test_dependency_cap_exemption_is_per_distribution_and_dependency(
+    tmp_path: Path,
+    slug: str,
+    dependencies: tuple[str, ...],
+    expected: list[tuple[str, str]],
+) -> None:
+    p = make_bblocks_project(tmp_path, slug=slug, dependencies=dependencies)
+    findings = _check_dependency_cap(Project(p))
+    assert [(f.code, f.severity) for f in findings] == expected
+
+
+def test_dependency_cap_item_claims_its_advisory_code() -> None:
+    """Item 9's advisory must render nested under item 9."""
+    item = next(i for i in FAMILY_CONTRACT if i.key == "no_caps")
+    assert "contract.dependency_cap_exempt" in item.codes
 
 
 # --- item 10: OIDC publishing ------------------------------------------------------
@@ -509,6 +558,108 @@ def test_oidc_flags_no_publish_workflow(tmp_path: Path) -> None:
 def test_oidc_skipped_for_project_type(tmp_path: Path) -> None:
     p = make_bblocks_project(tmp_path, project_type="project", with_components=())
     assert _check_oidc_publish(Project(p)) == []
+
+
+# --- a package in a subdirectory of a multi-language repo ---------------------------
+
+_SUBDIRECTORY_RELEASE_WORKFLOW = (
+    "name: Python release\n"
+    "on:\n"
+    "  push:\n"
+    "    tags: ['python-v*']\n"
+    "jobs:\n"
+    "  publish:\n"
+    "    runs-on: ubuntu-latest\n"
+    "    environment: pypi\n"
+    "    permissions:\n"
+    "      id-token: write\n"
+    "    defaults:\n"
+    "      run:\n"
+    "        working-directory: python\n"
+    "    steps:\n"
+    "      - run: uv build\n"
+    "      - run: uv publish\n"
+)
+
+
+def _make_subdirectory_repo(tmp_path: Path, *, git: bool) -> Project:
+    """A family package in `python/`, with pre-commit and workflows at the root."""
+    (tmp_path / "python").mkdir()
+    package = make_family_project(
+        tmp_path / "python",
+        with_components=("pre-commit", "ruff", "pytest"),
+        dependencies=("readerkit>=0.1.0",),
+        workflows=None,
+    )
+    # The pre-commit component adds the dev dependency. The config lives at the root.
+    (package / ".pre-commit-config.yaml").unlink()
+    if git:
+        (tmp_path / ".git").mkdir()
+    (tmp_path / ".pre-commit-config.yaml").write_text("repos: []\n", encoding="utf-8")
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "python-release.yml").write_text(
+        _SUBDIRECTORY_RELEASE_WORKFLOW, encoding="utf-8"
+    )
+    return Project(package)
+
+
+def test_subdirectory_package_reads_repo_level_files_from_git_root(
+    tmp_path: Path,
+) -> None:
+    project = _make_subdirectory_repo(tmp_path, git=True)
+    findings = run_contract_checks(project, check_remote=False)
+    assert [f for f in findings if f.severity == "finding"] == []
+    assert _check_pre_commit(project) == []
+    assert _check_oidc_publish(project) == []
+
+
+def test_subdirectory_package_outside_git_reads_its_own_directory(
+    tmp_path: Path,
+) -> None:
+    """Without a `.git` above it the package directory is the root, so the
+    parent's files are invisible."""
+    project = _make_subdirectory_repo(tmp_path, git=False)
+    assert _codes(_check_pre_commit(project)) == ["contract.pre_commit"]
+    assert _codes(_check_oidc_publish(project)) == ["contract.oidc_publish"]
+
+
+@pytest.mark.parametrize(
+    ("package_part", "root_file"),
+    [(False, True), (True, False), (False, False)],
+    ids=["package-part-missing", "root-file-missing", "both-missing"],
+)
+def test_pre_commit_advice_names_the_missing_part_below_the_git_root(
+    tmp_path: Path, package_part: bool, root_file: bool
+) -> None:
+    project = _make_subdirectory_repo(tmp_path, git=True)
+    if not root_file:
+        (tmp_path / ".pre-commit-config.yaml").unlink()
+    if not package_part:
+        pyproject = project.path / "pyproject.toml"
+        pyproject.write_text(pyproject.read_text().replace('"pre-commit>=4.6.0", ', ""))
+        project.reload_pyproject()
+
+    [finding] = _check_pre_commit(project)
+
+    advice = finding.remediation or ""
+    assert ("bblocks-projects add pre-commit" in advice) is not package_part
+    assert (".pre-commit-config.yaml" in advice) is not root_file
+    assert ("a-package-in-a-multi-language-repo" in advice) is not root_file
+
+
+@pytest.mark.parametrize("git_at_package", [True, False])
+def test_pre_commit_advice_is_the_add_command_at_the_git_root(
+    tmp_path: Path, git_at_package: bool
+) -> None:
+    """A package at its git root, or outside git, can run `add` safely."""
+    project = _make_subdirectory_repo(tmp_path, git=False)
+    if git_at_package:
+        (project.path / ".git").mkdir()
+
+    [finding] = _check_pre_commit(project)
+
+    assert finding.remediation == "bblocks-projects add pre-commit"
 
 
 # --- gating: is_family_project, run_checks(family=...), stubs ----------------------

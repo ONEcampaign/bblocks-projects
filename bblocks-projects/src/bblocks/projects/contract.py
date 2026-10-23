@@ -31,7 +31,7 @@ import yaml
 
 from bblocks.projects import _source_scan
 from bblocks.projects.components import COMPONENTS_REGISTRY
-from bblocks.projects.doctor import Finding, _component_installed
+from bblocks.projects.doctor import Finding, _component_installed, install_advice
 from bblocks.projects.installer import _parse_dep_name
 from bblocks.projects.project import Project
 
@@ -68,7 +68,11 @@ FAMILY_CONTRACT: tuple[ContractItem, ...] = (
         6,
         "readerkit",
         "readerkit for HTTP and caching",
-        ("contract.readerkit", "contract.readerkit_skipped"),
+        (
+            "contract.readerkit",
+            "contract.readerkit_exempt",
+            "contract.readerkit_skipped",
+        ),
     ),
     ContractItem(
         7,
@@ -92,7 +96,12 @@ FAMILY_CONTRACT: tuple[ContractItem, ...] = (
             "contract.import_no_package",
         ),
     ),
-    ContractItem(9, "no_caps", "No upper-bound pins", ("contract.dependency_cap",)),
+    ContractItem(
+        9,
+        "no_caps",
+        "No upper-bound pins",
+        ("contract.dependency_cap", "contract.dependency_cap_exempt"),
+    ),
     ContractItem(
         10,
         "oidc",
@@ -119,6 +128,29 @@ FAMILY_CONTRACT: tuple[ContractItem, ...] = (
 
 FLOOR = (3, 12)
 FLOOR_EXEMPT: frozenset[str] = frozenset({"dcp-tools", "dcp_tools"})
+# Item 6 exemptions: normalized distribution name -> the reason `doctor`
+# reports. Item 7 still applies to every package listed here.
+READERKIT_EXEMPT: dict[str, str] = {
+    "development-finance": (
+        "the DFO client needs an async httpx2 transport and a store of "
+        "immutable, digest-keyed versions, and readerkit is synchronous with "
+        "a TTL-bound cache"
+    ),
+}
+# Item 9 exemptions: normalized distribution name -> {normalized dependency
+# name: the reason `doctor` reports}. Only a listed dependency of a listed
+# distribution is softened; every other cap is still a finding.
+_HTTPX2_POOL_REASON = (
+    "the client routes connections through httpx2's and httpcore2's private "
+    "pool layout to enforce its deadlines, and a release that moves it breaks "
+    "every client at construction"
+)
+CAP_EXEMPT: dict[str, dict[str, str]] = {
+    "development-finance": {
+        "httpx2": _HTTPX2_POOL_REASON,
+        "httpcore2": _HTTPX2_POOL_REASON,
+    },
+}
 
 
 @cache
@@ -305,7 +337,7 @@ def _check_pre_commit(project: Project) -> list[Finding]:
             "contract.pre_commit",
             "finding",
             "pre-commit is not installed",
-            "bblocks-projects add pre-commit",
+            install_advice(COMPONENTS_REGISTRY["pre-commit"], project),
         )
     ]
 
@@ -380,6 +412,18 @@ def _check_readerkit(project: Project) -> list[Finding]:
     assert modules is not None  # "present" only reachable with real modules
     if _source_scan.package_uses_readerkit(project, modules):
         return []
+    # Like FLOOR_EXEMPT, the exemption only softens a failure, and stays
+    # visible as an advisory.
+    name = _source_scan.normalize_name(project.get_project_name() or "")
+    if name in READERKIT_EXEMPT:
+        return [
+            Finding(
+                "contract.readerkit_exempt",
+                "advisory",
+                f"readerkit not required: {READERKIT_EXEMPT[name]}",
+                None,
+            )
+        ]
     evidence = _source_scan.fetch_evidence(project, modules)
     return [
         Finding(
@@ -557,12 +601,26 @@ _CAP_VERSION_RE = re.compile(r"(?:~=|==(?!=))\s*([\w.*+!-]+)")
 
 
 def _check_dependency_cap(project: Project) -> list[Finding]:
+    exempt = CAP_EXEMPT.get(
+        _source_scan.normalize_name(project.get_project_name() or ""), {}
+    )
     findings: list[Finding] = []
     for spec in project.iter_runtime_dependencies():
         stripped = spec.strip()
         name = _parse_dep_name(stripped)
         remainder = stripped[len(name) :]
         if not _CAP_RE.search(remainder):
+            continue
+        if reason := exempt.get(_source_scan.normalize_name(name)):
+            # Like READERKIT_EXEMPT, the exemption stays visible as an advisory.
+            findings.append(
+                Finding(
+                    "contract.dependency_cap_exempt",
+                    "advisory",
+                    f"{stripped} pins an upper bound, allowed: {reason}",
+                    None,
+                )
+            )
             continue
         lower_match = _LOWER_BOUND_RE.search(remainder) or _CAP_VERSION_RE.search(
             remainder

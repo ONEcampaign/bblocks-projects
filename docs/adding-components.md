@@ -23,6 +23,8 @@ uvx bblocks-projects add --list
 | `pytest` | `[tool.pytest.ini_options]`, `[tool.coverage.*]` + `pytest`, `pytest-cov` dev deps | any |
 | `pypi-publish` | `.github/workflows/release.yml` + ensures `[build-system]` exists | `package` only |
 
+`.pre-commit-config.yaml` and everything under `.github/` belong at the root of the git work tree, the place Git and GitHub read them from. A package at its git root, or outside a git work tree, gets all five components in its own directory. A package below the git root, such as `python/` in a multi-language repo, shares those files with every language, so `add` installs the package-side part of a component (its dev dependencies and `pyproject.toml` sections) and leaves the repo-level files alone, with or without `--force`. For each file it skips, `add` prints the path at the git root and whether it exists there. A missing file gets "add it at the git root by hand" and a link to [A package in a multi-language repo](the-family-contract.md#a-package-in-a-multi-language-repo), which says what each file needs. `add pre-commit` therefore adds the `pre-commit` dev dependency and no `.pre-commit-config.yaml`, and `add ci` has no package-side part to install.
+
 Component definitions live in `src/bblocks/projects/components.py` if you want the precise list of files and config keys each one writes.
 
 ## Add one component

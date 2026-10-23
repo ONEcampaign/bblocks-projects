@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from bblocks.projects.contract import (
     _check_cache_contract,
     _check_import_time,
@@ -107,17 +109,61 @@ def test_readerkit_provider_exemption(tmp_path: Path) -> None:
     assert _check_readerkit(Project(p)) == []
 
 
-def test_readerkit_fetch_indicator_via_import_only(tmp_path: Path) -> None:
+@pytest.mark.parametrize("module", ["httpx", "httpx2"])
+def test_readerkit_fetch_indicator_via_import_only(tmp_path: Path, module: str) -> None:
     """No fetch library declared as a dependency, but imported directly."""
     p = make_bblocks_project(
         tmp_path,
         preset="family",
         python_version="3.12",
-        package_modules={"__init__.py": "import httpx\n"},
+        package_modules={"__init__.py": f"import {module}\n"},
     )
     findings = _check_readerkit(Project(p))
     assert _codes(findings) == ["contract.readerkit"]
-    assert "Imports httpx" in findings[0].message
+    assert f"Imports {module}" in findings[0].message
+
+
+def test_readerkit_fetch_indicator_via_httpx2_dependency(tmp_path: Path) -> None:
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        dependencies=("httpx2>=2.15",),
+        package_modules={"__init__.py": "x = 1\n"},
+    )
+    findings = _check_readerkit(Project(p))
+    assert _codes(findings) == ["contract.readerkit"]
+    assert "Declares httpx2" in findings[0].message
+
+
+def _make_dfo_client(tmp_path: Path) -> Project:
+    """A `development-finance` package on httpx2 that caches with no cache surface."""
+    p = make_bblocks_project(
+        tmp_path,
+        slug="development_finance",
+        preset="family",
+        python_version="3.12",
+        dependencies=("httpx2>=2.15", "platformdirs>=4.0"),
+        package_modules={"__init__.py": "import httpx2\n"},
+    )
+    return Project(p)
+
+
+def test_readerkit_exemption_is_advisory(tmp_path: Path) -> None:
+    findings = _check_readerkit(_make_dfo_client(tmp_path))
+    assert _codes(findings) == ["contract.readerkit_exempt"]
+    assert findings[0].severity == "advisory"
+
+
+def test_readerkit_exemption_leaves_the_cache_contract_in_force(
+    tmp_path: Path,
+) -> None:
+    findings = _check_cache_contract(_make_dfo_client(tmp_path))
+    assert _codes(findings) == [
+        "contract.cache_redirect",
+        "contract.cache_env_var",
+        "contract.cache_disable",
+    ]
 
 
 # --- item 7: the cache contract --------------------------------------------------
@@ -262,6 +308,19 @@ def test_cache_contract_na_when_package_does_not_cache(tmp_path: Path) -> None:
     assert _check_cache_contract(Project(p)) == []
 
 
+@pytest.mark.parametrize("module", ["cache.py", "_cache.py"])
+def test_cache_contract_applies_to_a_cache_module_without_a_cache_dependency(
+    tmp_path: Path, module: str
+) -> None:
+    p = make_bblocks_project(
+        tmp_path,
+        preset="family",
+        python_version="3.12",
+        package_modules={"__init__.py": "x = 1\n", module: "x = 1\n"},
+    )
+    assert "contract.cache_redirect" in _codes(_check_cache_contract(Project(p)))
+
+
 def test_cache_skipped_when_no_package_found(tmp_path: Path) -> None:
     """Same defect as item 6's n/a dash, one item over: no package root
     under src/ must not read as "doesn't cache" (see
@@ -277,7 +336,7 @@ def test_cache_skipped_when_no_package_found(tmp_path: Path) -> None:
 
 def test_cache_skipped_when_a_sibling_module_is_unparseable(tmp_path: Path) -> None:
     """package_caches never reads a module's parsed content — it only
-    checks declared dependencies and cache.py/cache/_cache directories — so
+    checks declared dependencies and cache.py/_cache.py/cache/_cache modules — so
     a parse failure elsewhere can't literally hide cache evidence the way
     it can for item 6. But a scan with any parse failure is still not a
     clean scan, and item 7 must not claim a verified n/a on the strength

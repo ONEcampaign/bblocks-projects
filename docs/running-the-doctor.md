@@ -115,7 +115,7 @@ uvx bblocks-projects doctor --path /path/to/my-package --family --check-remote -
 
 `--check-remote` calls `gh api` (branch protection) and `api.anaconda.org` (the conda-forge feedstock), 8-second timeout each. Every failure mode — no `gh` on `PATH`, a timeout, a 403 that means "can't tell" rather than "unprotected" — degrades to the same `*_skipped` advisory rather than a false finding.
 
-See [The bblocks family contract](the-family-contract.md) for what each item means, the two named exemptions, and the checks' known false negatives and false positives.
+See [The bblocks family contract](the-family-contract.md) for what each item means, the named exemptions, packages in a subdirectory of a multi-language repo, and the checks' known false negatives and false positives.
 
 ## What it checks
 
@@ -123,7 +123,7 @@ Four severities, grouped into five sections:
 
 - **Catastrophic** — the project is unreadable (`pyproject.toml` missing, malformed, or unreadable; `.copier-answers.yml` missing, unreadable, malformed, or not a YAML mapping). Always exits `2`. Other checks are skipped because they can't run.
 - **Finding** — a drift the maintainer should know about: project type doesn't match the on-disk layout, `project_slug` in `.copier-answers.yml` doesn't match the actual package name, `python_version` in `.copier-answers.yml` disagrees (in either direction) with the lower bound parsed from `requires-python`, a standard component is missing, the local template is behind upstream, or (under `--family`) a family-contract item fails outright.
-- **Advisory** — informational only: `--check-updates` or `--check-remote` couldn't reach the network, a family-contract source scan couldn't run or couldn't attribute what it found to a job or module, an import-time call `doctor` can't classify, or an item that's exempted rather than checked (the Python-floor exemption).
+- **Advisory** — informational only: `--check-updates` or `--check-remote` couldn't reach the network, a family-contract source scan couldn't run or couldn't attribute what it found to a job or module, an import-time call `doctor` can't classify, or an item that's exempted rather than checked (the Python-floor and readerkit exemptions).
 - **Not applicable** (`–`) — family-contract items 6 and 7 render this instead of a pass when the package doesn't fetch or doesn't cache at all. Only appears in the Family contract section, only under `--family`.
 - **Not checked** (`?`) — every family-contract item renders this instead of a pass, a fail, or n/a when a catastrophic finding stops the checks from running before any item can be evaluated.
 

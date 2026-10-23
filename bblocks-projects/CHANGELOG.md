@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Packages in a subdirectory of a multi-language repo.** `doctor` reads `.pre-commit-config.yaml` and `.github/workflows/` from the root of the git work tree that contains `--path`, so `doctor --family --path python` passes items 4 and 10 on the repo's root files. See [A package in a multi-language repo](../docs/the-family-contract.md#a-package-in-a-multi-language-repo).
+- **Item 6 exemption for `development-finance`**, the DFO client, reported as the `contract.readerkit_exempt` advisory. Item 7 still applies to it.
+- **Item 9 exemption for `development-finance`**, limited to its `httpx2` and `httpcore2` bounds and reported as the `contract.dependency_cap_exempt` advisory. The client reaches into those libraries' private pool layout to enforce its deadlines. Any other capped dependency of that package, and any other package capping `httpx2`, is still a `contract.dependency_cap` finding.
+- Item 6 counts `httpx2`, as a dependency or an import, as a fetch signal.
+- `add` for a package below the root of its git work tree installs a component's package-side part (dev dependencies and `pyproject.toml` sections) and skips its repo-level files, `.pre-commit-config.yaml` and everything under `.github/`, which every language in the repo shares. It prints each skipped root path and whether it exists, tells the user to add a missing one at the git root by hand, and links [A package in a multi-language repo](../docs/the-family-contract.md#a-package-in-a-multi-language-repo). `--force` never writes a root file in that layout. `doctor` follows the same rule for `components.missing` and item 4: it advises `bblocks-projects add <component>` when the package-side part is missing, names the root file when only that is missing, and names both when both are. A package at its git root, or outside git, behaves as before.
+
+### Fixed
+
+- `add` fails a component when `uv add` fails for its dev dependencies. It prints uv's stderr, reports the component as not installed, lists the files and `pyproject.toml` changes it already made and left in place, and exits 1. It reported success and exited 0.
+- The rendered `ci.yml`, `pyproject.toml`, `.coveragerc`, and README point `ty check`, coverage, and the `ty` include at `src/<module>`, where `<module>` is `[tool.uv.build-backend] module-name` when set and the project slug otherwise. They used the slug, which names no directory for a distribution such as `development-finance`.
+- Item 7 recognises a package whose cache module is `_cache.py`. It reported n/a for that layout when the package declared no cache dependency.
+- `drift.project_slug_mismatch` compares `project_slug` against `[tool.uv.build-backend] module-name` when it is set, so a distribution whose import package differs from its name passes.
+- A generated `tests/__init__.py` names its project. The template file lacked the `.jinja` suffix, so copier copied the `{{ project_slug }}` placeholder as text.
+
 ## [1.1.1] - 2026-08-13
 
 ### Fixed

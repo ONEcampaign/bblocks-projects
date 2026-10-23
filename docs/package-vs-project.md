@@ -66,7 +66,7 @@ We considered making `tests/` mandatory for both types and rejected it. Analysis
 
 - **Switching after generation is manual.** `update` won't reshape the tree. Going `project` → `package` means: add `tests/`, add `py.typed`, swap the looser ruff config for the stricter one, run `bblocks-projects add pypi-publish`. Going `package` → `project` means: add a `data/` tree — and the existing `tests/` directory becomes orphaned, since `update` won't remove it.
 - **`doctor` enforces the type's expected layout.** A `project` missing `data/`, or a `package` missing `src/{slug}/`, produces a `drift` finding. Drift here usually means someone deleted a directory by accident.
-- **One repo, one type.** A single repo that's both isn't supported. Monorepo-style "library + analysis using it" cases should be two repos, with the analysis depending on the library through normal `uv add`.
+- **One repo, one type.** A single repo that's both isn't supported. Monorepo-style "library + analysis using it" cases should be two repos, with the analysis depending on the library through normal `uv add`. A multi-language package repo, one library shipped in Python and another language, keeps one package per language directory (`python/`, `typescript/`), and the Python package is a `package` in its own right. See [A package in a multi-language repo](the-family-contract.md#a-package-in-a-multi-language-repo).
 
 ## When this might change
 

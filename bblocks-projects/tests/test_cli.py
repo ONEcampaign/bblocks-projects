@@ -3,6 +3,7 @@
 import contextlib
 import re
 import subprocess
+import tempfile
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -741,3 +742,37 @@ def test_add_install_component_returns_false_exits_one(
 
     result = runner.invoke(app, ["add", "pre-commit", "--yes", "--path", str(tmp_path)])
     assert result.exit_code == 1
+
+
+def test_add_fails_the_component_when_uv_add_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed `uv add` prints uv's stderr, exits 1, and names what was written."""
+    _make_bblocks_project(tmp_path, with_components=())
+    (tmp_path / "uv.lock").touch()
+    monkeypatch.setattr(
+        "bblocks.projects.cli._preflight_required_tools", lambda _: None
+    )
+
+    @contextlib.contextmanager
+    def rendered(_project: object) -> Iterator[Path]:
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "pyproject.toml").write_text("[tool.ruff]\nline-length = 88\n")
+            yield Path(d)
+
+    monkeypatch.setattr("bblocks.projects.installer.rendered_template_for", rendered)
+
+    def failing_uv(cmd: list[str], **_kwargs: object) -> None:
+        raise subprocess.CalledProcessError(2, cmd, stderr="No solution found\n")
+
+    monkeypatch.setattr("bblocks.projects.installer.subprocess.run", failing_uv)
+
+    result = runner.invoke(app, ["add", "ruff", "--yes", "--path", str(tmp_path)])
+
+    output = _plain(result.output)
+    assert result.exit_code == 1
+    assert "No solution found" in output
+    assert "ruff not installed" in output
+    assert "Updated: pyproject.toml" in output.split("Left in place")[1]
+    assert "Installed 0/1" in output
+    assert Project(tmp_path).has_config_section("tool.ruff")

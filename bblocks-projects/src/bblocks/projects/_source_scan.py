@@ -680,6 +680,7 @@ _FETCH_DEP_NAMES = frozenset(
     {
         "requests",
         "httpx",
+        "httpx2",
         "aiohttp",
         "urllib3",
         "requests-cache",
@@ -689,6 +690,7 @@ _FETCH_DEP_NAMES = frozenset(
 _FETCH_IMPORT_MODULES = (
     "requests",
     "httpx",
+    "httpx2",
     "aiohttp",
     "urllib.request",
     "http.client",
@@ -774,7 +776,7 @@ def package_caches(project: "Project", modules: tuple[ModuleScan, ...]) -> bool:
         if normalize_name(_parse_dep_name(spec.strip())) in _CACHE_DEP_NAMES:
             return True
     for root in project.package_roots():
-        for name in ("cache.py", "cache", "_cache"):
+        for name in ("cache.py", "_cache.py", "cache", "_cache"):
             if (root / name).exists():
                 return True
     return False
